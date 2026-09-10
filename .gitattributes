@@ -1,0 +1,13 @@
+# Normalizacao de fim de linha.
+# O grupo trabalha em Windows e Linux; sem esta regra o mesmo arquivo aparece
+# como "totalmente alterado" no diff apenas por causa de CRLF vs LF.
+# O repositorio guarda sempre LF e o checkout tambem usa LF em toda plataforma.
+* text=auto eol=lf
+
+# Artefatos binarios: nunca converter nem tentar diferenciar linha a linha.
+*.joblib binary
+*.pkl    binary
+*.png    binary
+*.jpg    binary
+*.pdf    binary
+*.zip    binary

@@ -1,0 +1,27 @@
+# Parâmetros do experimento — versionados no git.
+#
+# Divisão de responsabilidade com o .env:
+#   .env         -> infraestrutura e ambiente (URIs, caminhos, nível de log)
+#   params.yaml  -> decisões de modelagem (o "o quê" do experimento)
+#
+# Na Etapa 3 este arquivo será declarado como `params:` no dvc.yaml, para que
+# alterar um hiperparâmetro invalide o cache do stage e reexecute o pipeline.
+
+seed: 42
+
+split:
+  test_size: 0.2
+  stratify: true
+
+model:
+  # Definido na Etapa 5. Valores abaixo são apenas o ponto de partida.
+  name: random_forest
+  params:
+    n_estimators: 300
+    max_depth: null
+    class_weight: balanced
+
+evaluation:
+  # Métrica de decisão para promover um modelo no Model Registry.
+  primary_metric: roc_auc
+  decision_threshold: 0.5

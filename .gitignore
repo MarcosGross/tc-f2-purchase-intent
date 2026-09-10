@@ -1,0 +1,48 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+build/
+dist/
+
+# ---------- Ambientes virtuais ----------
+.venv/
+venv/
+env/
+
+# ---------- Configuração local (o .env.example FICA versionado) ----------
+.env
+.env.local
+
+# ---------- Ferramentas de qualidade / testes ----------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---------- Dados e modelos: versionados pelo DVC, não pelo git ----------
+# O DVC grava os ponteiros (*.dvc / dvc.lock), que SÃO versionados.
+/data/raw/*
+/data/processed/*
+/models/*
+/reports/*
+!**/.gitkeep
+!*.dvc
+
+# ---------- DVC ----------
+/.dvc/cache/
+/.dvc/tmp/
+/.dvc/config.local
+
+# ---------- MLflow ----------
+mlruns/
+mlartifacts/
+mlflow.db
+
+# ---------- Editores / SO ----------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

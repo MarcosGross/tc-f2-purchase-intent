@@ -1,0 +1,35 @@
+# Contexto de build enxuto: só entra o que é necessário para instalar e rodar.
+.git/
+.gitignore
+.dvc/
+.venv/
+venv/
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Segredos nunca entram na imagem — as variáveis são injetadas em runtime.
+.env
+.env.local
+
+# Dados e artefatos são obtidos via DVC/MLflow, não copiados para a imagem.
+data/
+models/
+reports/
+mlruns/
+mlartifacts/
+mlflow.db
+
+docs/
+*.md
+!README.md
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
