@@ -7,11 +7,11 @@ pipeline puros e testáveis (sem dependência de ambiente).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
 import os
-from pathlib import Path
 import random
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -64,9 +64,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
             "https://archive.ics.uci.edu/static/public/468/"
             "online+shoppers+purchasing+intention+dataset.zip",
         ),
-        raw_data_path=configured_path(
-            "RAW_DATA_PATH", "data/raw/online_shoppers_intention.csv"
-        ),
+        raw_data_path=configured_path("RAW_DATA_PATH", "data/raw/online_shoppers_intention.csv"),
         processed_data_dir=configured_path("PROCESSED_DATA_DIR", "data/processed"),
         models_dir=configured_path("MODELS_DIR", "models"),
         reports_dir=configured_path("REPORTS_DIR", "reports"),
@@ -88,9 +86,7 @@ def load_params(params_path: Path) -> dict[str, Any]:
     with params_path.open("r", encoding="utf-8") as stream:
         params = yaml.safe_load(stream)
     if not isinstance(params, dict):
-        raise ValueError(
-            f"O arquivo de parâmetros deve conter um mapa YAML: {params_path}"
-        )
+        raise ValueError(f"O arquivo de parâmetros deve conter um mapa YAML: {params_path}")
     return params
 
 

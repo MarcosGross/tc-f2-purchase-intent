@@ -10,6 +10,7 @@ Fonte: Online Shoppers Purchasing Intention Dataset (UCI, id 468).
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -44,9 +45,7 @@ def download_dataset(url: str, destination: Path) -> Path:
 
     try:
         with ZipFile(BytesIO(archive_bytes)) as archive:
-            csv_files = [
-                name for name in archive.namelist() if name.lower().endswith(".csv")
-            ]
+            csv_files = [name for name in archive.namelist() if name.lower().endswith(".csv")]
             if not csv_files:
                 raise ValueError("O arquivo ZIP baixado não contém nenhum CSV.")
             preferred = next(
@@ -78,7 +77,21 @@ def load_raw_dataset(path: Path) -> pd.DataFrame:
     return dataframe
 
 
-def describe_dataset(dataframe: pd.DataFrame) -> dict[str, object]:
+@dataclass(frozen=True)
+class DatasetSummary:
+    """Resumo descritivo do dataset bruto, produzido na ingestão.
+
+    Cada estatística tem nome e tipo próprios em vez de virar chave de um
+    dicionário genérico — mesmo motivo de `DataSplits` em `data_split`.
+    """
+
+    rows: int
+    columns: int
+    column_types: dict[str, str]
+    target_distribution: dict[str, int]
+
+
+def describe_dataset(dataframe: pd.DataFrame) -> DatasetSummary:
     """Resume o dataset (dimensões, tipos e balanceamento do alvo).
 
     Usado para registrar no MLflow e para documentar o schema real, que ainda
@@ -88,19 +101,17 @@ def describe_dataset(dataframe: pd.DataFrame) -> dict[str, object]:
         dataframe: DataFrame bruto.
 
     Returns:
-        Dicionário com as estatísticas descritivas do dataset.
+        Resumo descritivo do dataset.
     """
     if TARGET_COLUMN not in dataframe.columns:
         raise ValueError(f"Coluna alvo obrigatória ausente: {TARGET_COLUMN}")
     target_counts = dataframe[TARGET_COLUMN].value_counts(dropna=False)
-    return {
-        "rows": int(dataframe.shape[0]),
-        "columns": int(dataframe.shape[1]),
-        "column_types": {name: str(dtype) for name, dtype in dataframe.dtypes.items()},
-        "target_distribution": {
-            str(label): int(count) for label, count in target_counts.items()
-        },
-    }
+    return DatasetSummary(
+        rows=int(dataframe.shape[0]),
+        columns=int(dataframe.shape[1]),
+        column_types={name: str(dtype) for name, dtype in dataframe.dtypes.items()},
+        target_distribution={str(label): int(count) for label, count in target_counts.items()},
+    )
 
 
 def main() -> None:
@@ -110,7 +121,12 @@ def main() -> None:
     path = download_dataset(settings.dataset_url, settings.raw_data_path)
     dataframe = load_raw_dataset(path)
     summary = describe_dataset(dataframe)
-    LOGGER.info("Dataset carregado: %s", summary)
+    LOGGER.info(
+        "Dataset carregado: %d linhas, %d colunas, distribuição do alvo %s",
+        summary.rows,
+        summary.columns,
+        summary.target_distribution,
+    )
 
 
 if __name__ == "__main__":
