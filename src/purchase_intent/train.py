@@ -11,6 +11,7 @@ from typing import Any
 
 import pandas as pd
 from sklearn.base import ClassifierMixin
+from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
 
@@ -28,7 +29,7 @@ def build_estimator(model_name: str, model_params: dict[str, Any], seed: int) ->
     raise NotImplementedError("Implementar na Etapa 5.")
 
 
-def build_pipeline(preprocessor: Any, estimator: ClassifierMixin) -> Pipeline:
+def build_pipeline(preprocessor: ColumnTransformer, estimator: ClassifierMixin) -> Pipeline:
     """Une pré-processamento e estimador em um único `Pipeline`.
 
     Manter os dois juntos garante que a inferência aplique as mesmas

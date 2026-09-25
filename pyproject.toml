@@ -1,0 +1,73 @@
+[project]
+name = "purchase-intent"
+version = "0.1.0"
+description = "Pipeline de ML para propensao de compra em e-commerce"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+authors = [{ name = "Os Outliers" }]
+dependencies = [
+    "pandas (>=2.2.3,<3.0.0)",
+    "scikit-learn (>=1.6.1,<2.0.0)",
+    "mlflow (>=2.20.3,<3.0.0)",
+    "python-dotenv (>=1.0.1,<2.0.0)",
+    "pyyaml (>=6.0.2,<7.0.0)",
+]
+
+[tool.poetry]
+packages = [{ include = "purchase_intent", from = "src" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+ruff = "^0.11.0"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Cada prefixo e uma familia de regras. ANN e D fazem o linter verificar
+# automaticamente os criterios de type hints e docstrings exigidos no enunciado.
+select = [
+    "E",    # pycodestyle: erros de estilo (PEP 8)
+    "W",    # pycodestyle: avisos (espaco no fim da linha, etc.)
+    "F",    # Pyflakes: bugs reais (import nao usado, variavel inexistente)
+    "I",    # isort: ordem e agrupamento dos imports
+    "UP",   # pyupgrade: sintaxe antiga que ja tem equivalente moderno
+    "B",    # flake8-bugbear: armadilhas classicas (ex.: default mutavel)
+    "SIM",  # flake8-simplify: trechos que podem ser escritos de forma mais simples
+    "ANN",  # flake8-annotations: exige type hints
+    "D",    # pydocstyle: exige e valida docstrings
+    "N",    # pep8-naming: snake_case em funcoes, PascalCase em classes
+    "C90",  # mccabe: complexidade ciclomatica
+    "PTH",  # flake8-use-pathlib: usar pathlib em vez de os.path
+    "RUF",  # regras proprias do Ruff
+]
+
+ignore = [
+    "D203",   # conflita com D211 (linha em branco antes da docstring de classe)
+    "D213",   # conflita com D212 (resumo comeca na primeira linha)
+    "ANN401", # permite `Any` onde ele e a verdade (params heterogeneos do YAML)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+# Acima de 8 caminhos possiveis, a funcao deve ser dividida.
+max-complexity = 8
+
+[tool.ruff.lint.per-file-ignores]
+# Testes se explicam pelo nome; docstring e hint de retorno seriam ruido.
+"tests/*" = ["D103", "ANN201"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

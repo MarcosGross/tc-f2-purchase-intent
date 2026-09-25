@@ -6,8 +6,8 @@ concluir uma compra a partir do seu comportamento de navegação na sessão.
 **Tech Challenge — Fase 2** · Pós Tech Machine Learning Engineering (FIAP)
 **Grupo:** Os Outliers
 
-> As instruções de instalação e execução serão adicionadas na Etapa 4, junto com
-> o Dockerfile e o pipeline DVC.
+As instruções de instalação e ingestão abaixo cobrem a Etapa 2. A execução do
+pipeline completo será documentada na Etapa 4, junto com Docker e DVC.
 
 ---
 
@@ -28,8 +28,16 @@ prever se ela resultará em compra.
 — UCI Machine Learning Repository (id 468). Cada linha representa uma sessão de
 navegação; a coluna `Revenue` indica se a sessão terminou em compra.
 
-O schema completo (colunas, tipos e balanceamento de classes) será documentado
-após o download, no stage de ingestão.
+O CSV bruto contém **12.330 sessões e 18 colunas**. A variável alvo `Revenue` é
+booleana: 10.422 sessões sem compra (`False`, 84,53%) e 1.908 com compra
+(`True`, 15,47%). A ingestão reportou estes tipos:
+
+| Tipo | Colunas |
+|---|---|
+| `int64` | `Administrative`, `Informational`, `ProductRelated`, `OperatingSystems`, `Browser`, `Region`, `TrafficType` |
+| `float64` | `Administrative_Duration`, `Informational_Duration`, `ProductRelated_Duration`, `BounceRates`, `ExitRates`, `PageValues`, `SpecialDay` |
+| `object` | `Month`, `VisitorType` |
+| `bool` | `Weekend`, `Revenue` |
 
 ## Foco do projeto
 
@@ -90,10 +98,26 @@ Duas fontes de configuração, com responsabilidades distintas:
 Apenas `config.py` lê essas fontes; os demais módulos recebem a configuração
 pronta.
 
+### Ambiente e ingestão (Etapa 2)
+
+Requer Python 3.11 ou 3.12 e Poetry 2.0 ou superior. Na raiz do repositório:
+
+```bash
+poetry install
+cp .env.example .env  # no PowerShell: Copy-Item .env.example .env
+poetry run python -m purchase_intent.data_ingestion
+```
+
+O comando baixa o ZIP oficial do UCI, grava o CSV configurado em
+`RAW_DATA_PATH` e registra dimensões, tipos de coluna e distribuição de
+`Revenue` no log. O arquivo `.env` local não deve ser commitado. O
+`poetry.lock` fixa as versões resolvidas para que o grupo instale o mesmo
+conjunto de dependências.
+
 ## Roadmap
 
 - [x] **Etapa 1** — Estrutura do repositório e esqueleto dos módulos
-- [ ] **Etapa 2** — Poetry, dependências e implementação da ingestão
+- [x] **Etapa 2** — Poetry, dependências e implementação da ingestão
 - [ ] **Etapa 3** — Pipeline DVC (`dvc.yaml`)
 - [ ] **Etapa 4** — Docker e instruções de execução
 - [ ] **Etapa 5** — Treino, avaliação e tracking no MLflow
