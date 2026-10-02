@@ -11,9 +11,6 @@ from __future__ import annotations
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 
-# Coluna alvo do dataset (booleana na origem: houve ou não compra na sessão).
-TARGET_COLUMN = "Revenue"
-
 # As listas de features serão preenchidas na Etapa 2, após inspecionar o CSV
 # baixado. Nada é assumido sobre o schema antes da verificação.
 NUMERIC_FEATURES: list[str] = []

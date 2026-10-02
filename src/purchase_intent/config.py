@@ -19,6 +19,10 @@ import yaml
 from dotenv import load_dotenv
 
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[2]
+DEFAULT_DATASET_URL = (
+    "https://archive.ics.uci.edu/static/public/468/"
+    "online+shoppers+purchasing+intention+dataset.zip"
+)
 
 
 @dataclass(frozen=True)
@@ -48,30 +52,29 @@ def load_settings(env_file: Path | None = None) -> Settings:
         Instância imutável de `Settings`.
     """
     load_dotenv(dotenv_path=env_file or PROJECT_ROOT / ".env", override=False)
-
-    def configured_path(name: str, default: str) -> Path:
-        path = Path(os.getenv(name, default)).expanduser()
-        return path if path.is_absolute() else PROJECT_ROOT / path
-
     return Settings(
         mlflow_tracking_uri=os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns"),
         mlflow_experiment_name=os.getenv("MLFLOW_EXPERIMENT_NAME", "purchase-intent"),
         mlflow_registered_model_name=os.getenv(
             "MLFLOW_REGISTERED_MODEL_NAME", "purchase-intent-classifier"
         ),
-        dataset_url=os.getenv(
-            "DATASET_URL",
-            "https://archive.ics.uci.edu/static/public/468/"
-            "online+shoppers+purchasing+intention+dataset.zip",
+        dataset_url=os.getenv("DATASET_URL", DEFAULT_DATASET_URL),
+        raw_data_path=_configured_path(
+            "RAW_DATA_PATH", "data/raw/online_shoppers_intention.csv"
         ),
-        raw_data_path=configured_path("RAW_DATA_PATH", "data/raw/online_shoppers_intention.csv"),
-        processed_data_dir=configured_path("PROCESSED_DATA_DIR", "data/processed"),
-        models_dir=configured_path("MODELS_DIR", "models"),
-        reports_dir=configured_path("REPORTS_DIR", "reports"),
-        params_path=configured_path("PARAMS_PATH", "configs/params.yaml"),
+        processed_data_dir=_configured_path("PROCESSED_DATA_DIR", "data/processed"),
+        models_dir=_configured_path("MODELS_DIR", "models"),
+        reports_dir=_configured_path("REPORTS_DIR", "reports"),
+        params_path=_configured_path("PARAMS_PATH", "configs/params.yaml"),
         random_seed=int(os.getenv("RANDOM_SEED", "42")),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
     )
+
+
+def _configured_path(name: str, default: str) -> Path:
+    """Resolve um caminho configurado, usando a raiz do projeto como base."""
+    path = Path(os.getenv(name, default)).expanduser()
+    return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 def load_params(params_path: Path) -> dict[str, Any]:
