@@ -9,6 +9,9 @@
 
 seed: 42
 
+dataset:
+  target_column: Revenue
+
 split:
   test_size: 0.2
   stratify: true

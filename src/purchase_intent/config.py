@@ -20,8 +20,7 @@ from dotenv import load_dotenv
 
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[2]
 DEFAULT_DATASET_URL = (
-    "https://archive.ics.uci.edu/static/public/468/"
-    "online+shoppers+purchasing+intention+dataset.zip"
+    "https://archive.ics.uci.edu/static/public/468/online+shoppers+purchasing+intention+dataset.zip"
 )
 
 
@@ -59,9 +58,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
             "MLFLOW_REGISTERED_MODEL_NAME", "purchase-intent-classifier"
         ),
         dataset_url=os.getenv("DATASET_URL", DEFAULT_DATASET_URL),
-        raw_data_path=_configured_path(
-            "RAW_DATA_PATH", "data/raw/online_shoppers_intention.csv"
-        ),
+        raw_data_path=_configured_path("RAW_DATA_PATH", "data/raw/online_shoppers_intention.csv"),
         processed_data_dir=_configured_path("PROCESSED_DATA_DIR", "data/processed"),
         models_dir=_configured_path("MODELS_DIR", "models"),
         reports_dir=_configured_path("REPORTS_DIR", "reports"),
@@ -118,3 +115,41 @@ def configure_logging(level: str) -> None:
         level=numeric_level,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+
+
+@dataclass(frozen=True)
+class DataParameters:
+    """Parâmetros rastreáveis da preparação, independentes do ambiente pessoal."""
+
+    seed: int
+    test_size: float
+    stratify: bool
+    target_column: str
+
+
+def load_data_parameters(path: Path) -> DataParameters:
+    """Lê e valida somente os parâmetros usados pelo pipeline de dados."""
+    params = load_params(path)
+    try:
+        result = DataParameters(
+            seed=params["seed"],
+            test_size=params["split"]["test_size"],
+            stratify=params["split"]["stratify"],
+            target_column=params["dataset"]["target_column"],
+        )
+    except (KeyError, TypeError) as error:
+        raise ValueError("Parâmetros obrigatórios de dataset/split/seed ausentes.") from error
+    _validate_data_parameters(result)
+    return result
+
+
+def _validate_data_parameters(params: DataParameters) -> None:
+    """Rejeita configurações ambíguas antes de produzir qualquer arquivo."""
+    if type(params.seed) is not int or not 0 <= params.seed < 2**32:
+        raise ValueError("seed deve ser inteiro entre 0 e 2**32 - 1.")
+    if type(params.test_size) not in (int, float) or not 0 < params.test_size < 1:
+        raise ValueError("split.test_size deve ser número entre 0 e 1, exclusivamente.")
+    if type(params.stratify) is not bool:
+        raise ValueError("split.stratify deve ser booleano YAML, sem aspas.")
+    if params.target_column != "Revenue":
+        raise ValueError("dataset.target_column deve ser Revenue para este dataset.")
