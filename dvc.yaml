@@ -1,0 +1,56 @@
+stages:
+  prepare:
+    cmd: >-
+      python -m purchase_intent.data_split
+      --input data/raw/online_shoppers_intention.csv
+      --output-dir data/processed
+      --params configs/params.yaml
+    deps:
+      - data/raw/online_shoppers_intention.csv
+      - src/purchase_intent/__init__.py
+      - src/purchase_intent/config.py
+      - src/purchase_intent/schema.py
+      - src/purchase_intent/data_schema.py
+      - src/purchase_intent/data_split.py
+      - pyproject.toml
+      - poetry.lock
+    params:
+      - configs/params.yaml:
+          - seed
+          - dataset.target_column
+          - split.test_size
+          - split.stratify
+    outs:
+      - data/processed/train.csv
+      - data/processed/test.csv
+      - data/processed/split_manifest.json
+  validate:
+    cmd: >-
+      python -m purchase_intent.data_validation
+      --raw data/raw/online_shoppers_intention.csv
+      --train data/processed/train.csv
+      --test data/processed/test.csv
+      --manifest data/processed/split_manifest.json
+      --report reports/data_validation.json
+      --params configs/params.yaml
+    deps:
+      - data/raw/online_shoppers_intention.csv
+      - data/processed/train.csv
+      - data/processed/test.csv
+      - data/processed/split_manifest.json
+      - src/purchase_intent/__init__.py
+      - src/purchase_intent/config.py
+      - src/purchase_intent/schema.py
+      - src/purchase_intent/data_schema.py
+      - src/purchase_intent/data_split.py
+      - src/purchase_intent/data_validation.py
+      - pyproject.toml
+      - poetry.lock
+    params:
+      - configs/params.yaml:
+          - seed
+          - dataset.target_column
+          - split.test_size
+          - split.stratify
+    outs:
+      - reports/data_validation.json
