@@ -38,4 +38,5 @@ COPY --chown=app:app src/ ./src/
 COPY --chown=app:app configs/ ./configs/
 RUN chown app:app /app
 USER app
-ENTRYPOINT ["python", "-m", "dvc", "repro"]
+# O snapshot bruto é entrada; forçar reprodução deve executar somente os stages de dados.
+ENTRYPOINT ["python", "-m", "dvc", "repro", "--single-item", "prepare", "validate"]
