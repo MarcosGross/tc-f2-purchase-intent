@@ -38,5 +38,5 @@ COPY --chown=app:app src/ ./src/
 COPY --chown=app:app configs/ ./configs/
 RUN chown app:app /app
 USER app
-# O snapshot bruto é entrada; forçar reprodução deve executar somente os stages de dados.
-ENTRYPOINT ["python", "-m", "dvc", "repro", "--single-item", "prepare", "validate"]
+# O snapshot bruto é entrada; a lista explícita reproduz todo o pipeline de ML.
+ENTRYPOINT ["python", "-m", "dvc", "repro", "--single-item", "prepare", "validate", "train", "evaluate", "register"]

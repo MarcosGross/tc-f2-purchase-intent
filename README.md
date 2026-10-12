@@ -6,10 +6,9 @@ concluir uma compra a partir do seu comportamento de navegação na sessão.
 **Tech Challenge — Fase 2** · Pós Tech Machine Learning Engineering (FIAP)
 **Grupo:** Os Outliers
 
-As instruções abaixo continuam a entrega da Etapa 2 com **Containerização e
-Versionamento (Etapa 3 oficial)**. O pipeline de dados `prepare → validate` já
-executa via DVC e Docker. Treinamento, avaliação preditiva e Registry continuam
-reservados à próxima responsabilidade da equipe.
+As instruções abaixo documentam as Etapas 2 e 3 oficiais. O pipeline completo
+também inclui a **Etapa 4 oficial**: treinamento clássico, avaliação, MLflow
+Tracking e Model Registry.
 
 ---
 
@@ -62,9 +61,9 @@ isso o modelo é um classificador clássico do Scikit-Learn, e o esforço está 
 ├── data/raw/              # dataset bruto        (versionado por DVC)
 ├── data/processed/        # conjuntos de treino e teste (versionado por DVC)
 ├── models/                # artefatos de modelo  (versionado por DVC)
-├── reports/               # integridade dos dados; métricas futuras
+├── reports/               # validação de dados, métricas e registro do modelo
 ├── configs/params.yaml    # parâmetros de dados e modelagem
-├── dvc.yaml               # receita prepare → validate
+├── dvc.yaml               # pipeline de dados, treino, avaliação e registro
 ├── dvc.lock               # identidades geradas pela execução do DVC
 ├── Dockerfile             # ambiente Linux e alvo separado de testes
 └── docs/                  # ML Canvas e model card
@@ -72,8 +71,8 @@ isso o modelo é um classificador clássico do Scikit-Learn, e o esforço está 
 
 ### Módulos e stages do pipeline
 
-Cada módulo tem uma única responsabilidade. A execução atual termina em
-`validate`; os stages de modelagem da tabela são planejados para a continuação:
+Cada módulo tem uma única responsabilidade. O pipeline DVC executa os stages na
+ordem `prepare → validate → train → evaluate → register`:
 
 | Módulo | Responsabilidade | Stage DVC |
 |---|---|---|
@@ -101,9 +100,9 @@ Duas fontes de configuração, com responsabilidades distintas:
 - **`configs/params.yaml`** — decisões de modelagem: proporção do split,
   hiperparâmetros, métrica de promoção. É versionado e será declarado como
   `params:` no `dvc.yaml`, de modo que alterá-lo reexecute os stages afetados.
-  Na etapa 3, `seed`, `dataset.target_column` e `split.*` são as configurações
-  efetivamente consumidas. A variável legada `RANDOM_SEED` no `.env` não controla
-  esta divisão. Os caminhos de entrada/saída são explícitos nos comandos DVC.
+  `seed` e `split.*` configuram a preparação; `model.*`, `evaluation.*` e
+  `registry.*` controlam treino, avaliação e promoção. `RANDOM_SEED` no `.env`
+  não controla o split. Os caminhos de entrada/saída são explícitos no DVC.
 
 Apenas `config.py` lê essas fontes; os demais módulos recebem a configuração
 pronta.
@@ -229,17 +228,18 @@ para a decisão de armazenamento compartilhado.
 Com o bruto disponível e Docker iniciado:
 
 ```powershell
-docker build -t tc-f2-purchase-intent:etapa3 .
-docker run --rm --mount "type=bind,source=$($PWD.Path),target=/app" tc-f2-purchase-intent:etapa3
+docker build -t tc-f2-purchase-intent:etapa4 .
+docker run --rm --mount "type=bind,source=$($PWD.Path),target=/app" tc-f2-purchase-intent:etapa4
 if ($LASTEXITCODE -ne 0) { throw 'Falha no pipeline Docker.' }
-Get-Content -LiteralPath 'reports/data_validation.json'
+Get-Content -LiteralPath 'reports/metrics.json'
 ```
 
 O Dockerfile instala dependências pelo lock usando Poetry em um estágio
 separado. A base Python está fixada por digest. O runtime executa como `app`
 (uid 1000), com ambiente Linux em `/opt/venv`, sem usar a `.venv` Windows.
-O comando padrão é `python -m dvc repro --single-item prepare validate`;
-não há porta/servidor a iniciar. Ambos os estágios são executados explicitamente.
+O comando padrão executa `prepare`, `validate`, `train`, `evaluate` e
+`register`; não há porta/servidor a iniciar. A lista de stages fica explícita
+no `ENTRYPOINT` do Dockerfile.
 Isso evita reproduzir o ponteiro do snapshot bruto durante uma execução forçada,
 o que tentaria alterar suas permissões em alguns mounts Windows. As entradas
 continuam declaradas e verificadas por cada estágio; o bruto é somente leitura
@@ -256,17 +256,18 @@ Faça `dvc pull/push` no host quando seu remote for um caminho Windows:
 `C:\...` não existe no Linux do container. Mudou o lock? Sincronize o ambiente e
 reconstrua a imagem. Mudanças somente de dados/parâmetros são lidas da montagem.
 
-Para comprovar que os dois estágios realmente executaram dentro do container,
+Para comprovar que todos os stages realmente executaram dentro do container,
 sem apenas aproveitar resultados já existentes:
 
 ```powershell
-docker run --rm --mount "type=bind,source=$($PWD.Path),target=/app" tc-f2-purchase-intent:etapa3 --force --no-run-cache
+docker run --rm --mount "type=bind,source=$($PWD.Path),target=/app" tc-f2-purchase-intent:etapa4 --force --no-run-cache
 if ($LASTEXITCODE -ne 0) { throw 'Falha na reprodução forçada.' }
 poetry run dvc status
 ```
 
 Em uma máquina com dependências nativas funcionais, a execução local equivalente
-é `poetry run dvc repro --single-item prepare validate`. Na máquina de validação,
+é `poetry run dvc repro --single-item prepare validate train evaluate register`.
+Na máquina de validação,
 o Windows bloqueou uma DLL do
 Scikit-Learn com uma política de Controle de Aplicativo. O caminho comprovado
 para executar o pipeline e os testes foi o Docker Linux; não foi comprovada a
@@ -312,14 +313,48 @@ Branch de implementação: `feat/etapa-3-dvc-docker`, com commits separados por
 dependências, dataset, preparação, validação, pipeline, Docker e documentação.
 O compartilhamento da branch e sua integração seguem a revisão da equipe.
 
+### Modelagem e MLflow (Etapa 4 oficial)
+
+O baseline usa `RandomForestClassifier`. O pré-processamento preserva as
+features numéricas e aplica one-hot encoding nas categorias; códigos como
+`Browser`, `Region` e `TrafficType` são categorias nominais, não medidas
+ordenadas. O `Pipeline` ajusta o encoder somente no treino e inclui nele o
+classificador, evitando divergência entre treino e inferência.
+
+O stage `train` grava o pipeline em `models/trained_pipeline`, cria uma run no
+MLflow com hiperparâmetros e modelo, e salva o identificador da run. `evaluate`
+usa o conjunto de teste uma vez, registra ROC AUC, average precision, accuracy,
+precision, recall e F1, e grava `reports/metrics.json`. `register` registra a
+versão no Model Registry e aponta o alias `champion` quando o ROC AUC não é
+inferior ao da versão atual.
+
+O Registry exige backend de metadados baseado em banco; `.env.example` usa
+SQLite (`sqlite:///mlflow.db`). O banco e os artefatos ficam locais e são
+ignorados pelo Git. Para inspecionar as runs após executar o pipeline:
+
+```powershell
+poetry run mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
+
+O SQLite local serve para desenvolvimento e demonstração em uma máquina. Para
+compartilhar runs e versões registradas entre integrantes, a equipe precisará
+de um serviço MLflow e storage de artefatos compartilhados.
+
+Execução de referência desta implementação: ROC AUC `0.9195`, average
+precision `0.7172`, accuracy `0.8885`, precision `0.6271`, recall `0.6911` e
+F1 `0.6575`, calculados uma vez no teste de 2.466 sessões. Esses valores
+documentam este baseline e esta divisão; não são uma meta universal de qualidade.
+Uma chamada de inferência pelo alias `champion` também foi verificada em três
+sessões de teste.
+
 ## Roadmap
 
 Os números abaixo são **marcos internos do repositório**. Os marcos 3 e 4 juntos
-correspondem à Etapa 3 oficial do enunciado; os marcos 5 e 6 permanecem futuros.
+correspondem à Etapa 3 oficial do enunciado; os marcos 5 e 6 correspondem à Etapa 4 oficial.
 
 - [x] **Etapa 1** — Estrutura do repositório e esqueleto dos módulos
 - [x] **Etapa 2** — Poetry, dependências e implementação da ingestão
 - [x] **Etapa 3** — Pipeline DVC (`prepare → validate`, YAML e lock)
 - [x] **Etapa 4** — Docker e instruções de execução da Etapa 3 oficial
-- [ ] **Etapa 5** — Treino, avaliação e tracking no MLflow
-- [ ] **Etapa 6** — Model Registry e inferência
+- [x] **Etapa 5** — Treino, avaliação e tracking no MLflow
+- [x] **Etapa 6** — Model Registry e inferência

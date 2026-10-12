@@ -52,7 +52,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
     """
     load_dotenv(dotenv_path=env_file or PROJECT_ROOT / ".env", override=False)
     return Settings(
-        mlflow_tracking_uri=os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns"),
+        mlflow_tracking_uri=os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db"),
         mlflow_experiment_name=os.getenv("MLFLOW_EXPERIMENT_NAME", "purchase-intent"),
         mlflow_registered_model_name=os.getenv(
             "MLFLOW_REGISTERED_MODEL_NAME", "purchase-intent-classifier"

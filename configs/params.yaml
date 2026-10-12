@@ -4,8 +4,8 @@
 #   .env         -> infraestrutura e ambiente (URIs, caminhos, nível de log)
 #   params.yaml  -> decisões de modelagem (o "o quê" do experimento)
 #
-# Na Etapa 3 este arquivo será declarado como `params:` no dvc.yaml, para que
-# alterar um hiperparâmetro invalide o cache do stage e reexecute o pipeline.
+# Neste arquivo ficam as decisões que invalidam os stages correspondentes no DVC.
+# Alterar um parâmetro faz o DVC reexecutar os stages afetados.
 
 seed: 42
 
@@ -17,7 +17,7 @@ split:
   stratify: true
 
 model:
-  # Definido na Etapa 5. Valores abaixo são apenas o ponto de partida.
+  # Baseline clássico para a Etapa 4 oficial.
   name: random_forest
   params:
     n_estimators: 300
@@ -28,3 +28,6 @@ evaluation:
   # Métrica de decisão para promover um modelo no Model Registry.
   primary_metric: roc_auc
   decision_threshold: 0.5
+
+registry:
+  alias: champion
