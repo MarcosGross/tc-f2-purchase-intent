@@ -1,7 +1,11 @@
 # Contexto de build enxuto: só entra o que é necessário para instalar e rodar.
 .git/
 .gitignore
-.dvc/
+# .dvc/config precisa entrar (identifica /app como projeto DVC).
+# Cache, rascunho e config pessoal do remote ficam de fora.
+.dvc/cache/
+.dvc/tmp/
+.dvc/config.local
 .venv/
 poetry.toml
 venv/
@@ -18,8 +22,9 @@ htmlcov/
 .env
 .env.local
 
-# Dados e artefatos são obtidos via DVC/MLflow, não copiados para a imagem.
-data/
+# O CSV bruto é ENTRADA dos stages (deps no dvc.yaml) e entra na imagem.
+# Tudo que é SAÍDA do pipeline fica de fora: seria embutir resultado velho.
+data/processed/
 models/
 reports/
 mlruns/
