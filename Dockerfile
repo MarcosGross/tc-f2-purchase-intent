@@ -34,9 +34,25 @@ ENV VIRTUAL_ENV=/opt/venv \
     PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=app:app src/ ./src/
+
+# Camadas ordenadas da que muda menos para a que muda mais, para preservar cache.
+# Receita e identidades do pipeline.
+COPY --chown=app:app pyproject.toml poetry.lock dvc.yaml dvc.lock ./
+COPY --chown=app:app .dvc/ ./.dvc/
+# Entrada dos stages (snapshot bruto, ~1 MB).
+COPY --chown=app:app data/raw/ ./data/raw/
+# Configuração e código.
 COPY --chown=app:app configs/ ./configs/
-RUN chown app:app /app
+COPY --chown=app:app src/ ./src/
+
+# As saídas são geradas aqui dentro: os diretórios precisam existir e pertencer ao app.
+RUN mkdir -p data/processed reports && chown -R app:app /app
+# Ponto de montagem do volume do MLflow. Criado aqui com dono app para que
+# o volume nomeado herde a propriedade e o servidor (não-root) consiga escrever.
+RUN mkdir -p /mlflow/artifacts && chown -R app:app /mlflow
 USER app
-# O snapshot bruto é entrada; a lista explícita reproduz todo o pipeline de ML.
+# O DVC exige um repositório git. Um init vazio basta: nenhum histórico entra na imagem.
+RUN git init -q .
+# O snapshot bruto é entrada; a lista explícita reproduz todo o pipeline de ML sem
+# tentar refazer o ponteiro do bruto numa reprodução forçada.
 ENTRYPOINT ["python", "-m", "dvc", "repro", "--single-item", "prepare", "validate", "train", "evaluate", "register"]
