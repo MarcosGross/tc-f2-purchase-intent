@@ -14,6 +14,7 @@ env/
 # ---------- Configuração local (o .env.example FICA versionado) ----------
 .env
 .env.local
+/poetry.toml
 
 # ---------- Ferramentas de qualidade / testes ----------
 .pytest_cache/
@@ -24,7 +25,8 @@ htmlcov/
 
 # ---------- Dados e modelos: versionados pelo DVC, não pelo git ----------
 # O DVC grava os ponteiros (*.dvc / dvc.lock), que SÃO versionados.
-/data/raw/*
+# Ignorar só CSVs permite ao DVC descobrir os ponteiros dentro de data/raw.
+/data/raw/*.csv
 /data/processed/*
 /models/*
 /reports/*

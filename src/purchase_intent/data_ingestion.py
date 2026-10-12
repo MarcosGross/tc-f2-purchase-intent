@@ -19,9 +19,9 @@ from zipfile import BadZipFile, ZipFile
 import pandas as pd
 
 from purchase_intent.config import configure_logging, load_settings
+from purchase_intent.schema import TARGET_COLUMN
 
 LOGGER = logging.getLogger(__name__)
-TARGET_COLUMN = "Revenue"
 CSV_FILENAME = "online_shoppers_intention.csv"
 
 
@@ -35,14 +35,39 @@ def download_dataset(url: str, destination: Path) -> Path:
     Returns:
         Caminho do arquivo CSV gravado.
     """
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    archive_bytes = _download_archive(url)
+    return _extract_csv(archive_bytes, destination, url)
+
+
+def _download_archive(url: str) -> bytes:
+    """Baixa os bytes do ZIP publicado na URL informada.
+
+    Args:
+        url: Endereço HTTP do arquivo compactado.
+
+    Returns:
+        Conteúdo do ZIP em bytes.
+    """
     request = Request(url, headers={"User-Agent": "purchase-intent/0.1.0"})
     try:
         with urlopen(request, timeout=60) as response:
-            archive_bytes = response.read()
+            return response.read()
     except OSError as error:
         raise RuntimeError(f"Falha ao baixar o dataset de {url}: {error}") from error
 
+
+def _extract_csv(archive_bytes: bytes, destination: Path, source_url: str) -> Path:
+    """Extrai do ZIP o CSV do dataset e grava no caminho de destino.
+
+    Args:
+        archive_bytes: Conteúdo do arquivo ZIP baixado.
+        destination: Caminho de destino do CSV.
+        source_url: URL de origem, usada para contextualizar erros.
+
+    Returns:
+        Caminho do arquivo CSV gravado.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         with ZipFile(BytesIO(archive_bytes)) as archive:
             csv_files = [name for name in archive.namelist() if name.lower().endswith(".csv")]
@@ -54,7 +79,7 @@ def download_dataset(url: str, destination: Path) -> Path:
             )
             destination.write_bytes(archive.read(preferred))
     except BadZipFile as error:
-        raise ValueError(f"A resposta de {url} não é um arquivo ZIP válido.") from error
+        raise ValueError(f"A resposta de {source_url} não é um ZIP válido.") from error
 
     LOGGER.info("Dataset salvo em %s", destination)
     return destination
@@ -94,8 +119,8 @@ class DatasetSummary:
 def describe_dataset(dataframe: pd.DataFrame) -> DatasetSummary:
     """Resume o dataset (dimensões, tipos e balanceamento do alvo).
 
-    Usado para registrar no MLflow e para documentar o schema real, que ainda
-    será verificado após o primeiro download.
+    Os tipos observados e o balanceamento ajudam a documentar o schema e
+    entender a distribuição da variável alvo.
 
     Args:
         dataframe: DataFrame bruto.

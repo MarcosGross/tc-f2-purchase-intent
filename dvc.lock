@@ -1,0 +1,141 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: python -m purchase_intent.data_split --input 
+      data/raw/online_shoppers_intention.csv --output-dir data/processed 
+      --params configs/params.yaml
+    deps:
+    - path: data/raw/online_shoppers_intention.csv
+      hash: md5
+      md5: cc6ec1db03b4f10f8de52c56ff48b085
+      size: 1072063
+      isexec: true
+    - path: poetry.lock
+      hash: md5
+      md5: efbce4c3be662403929ba0e80d8d77cb
+      size: 515856
+      isexec: true
+    - path: pyproject.toml
+      hash: md5
+      md5: 3fcc12a4f597d56d660add3eb121e1df
+      size: 2411
+      isexec: true
+    - path: src/purchase_intent/__init__.py
+      hash: md5
+      md5: ab91f9df5af0ca2f95db62cbc077ad1c
+      size: 192
+      isexec: true
+    - path: src/purchase_intent/config.py
+      hash: md5
+      md5: cfbc106c8ee66eb387245a4ea386cd89
+      size: 5430
+      isexec: true
+    - path: src/purchase_intent/data_schema.py
+      hash: md5
+      md5: 04cdf6e2b3b7aac216e583d7e5646410
+      size: 3917
+      isexec: true
+    - path: src/purchase_intent/data_split.py
+      hash: md5
+      md5: 5ae46959a865a812edbbf146e4f6b706
+      size: 5786
+      isexec: true
+    - path: src/purchase_intent/schema.py
+      hash: md5
+      md5: bd36d63cd5b92948874cbc6abd3bcefc
+      size: 83
+      isexec: true
+    params:
+      configs/params.yaml:
+        dataset.target_column: Revenue
+        seed: 42
+        split.stratify: true
+        split.test_size: 0.2
+    outs:
+    - path: data/processed/split_manifest.json
+      hash: md5
+      md5: f1a65eb346b5343b0d9c92420ec0b2be
+      size: 150137
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 3a621c943b7decf7cce36deb17b67e68
+      size: 231648
+    - path: data/processed/train.csv
+      hash: md5
+      md5: 0ef24da64934922dc1bc9d174281e9ff
+      size: 925538
+  validate:
+    cmd: python -m purchase_intent.data_validation --raw 
+      data/raw/online_shoppers_intention.csv --train data/processed/train.csv 
+      --test data/processed/test.csv --manifest 
+      data/processed/split_manifest.json --report reports/data_validation.json 
+      --params configs/params.yaml
+    deps:
+    - path: data/processed/split_manifest.json
+      hash: md5
+      md5: f1a65eb346b5343b0d9c92420ec0b2be
+      size: 150137
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 3a621c943b7decf7cce36deb17b67e68
+      size: 231648
+    - path: data/processed/train.csv
+      hash: md5
+      md5: 0ef24da64934922dc1bc9d174281e9ff
+      size: 925538
+    - path: data/raw/online_shoppers_intention.csv
+      hash: md5
+      md5: cc6ec1db03b4f10f8de52c56ff48b085
+      size: 1072063
+      isexec: true
+    - path: poetry.lock
+      hash: md5
+      md5: efbce4c3be662403929ba0e80d8d77cb
+      size: 515856
+      isexec: true
+    - path: pyproject.toml
+      hash: md5
+      md5: 3fcc12a4f597d56d660add3eb121e1df
+      size: 2411
+      isexec: true
+    - path: src/purchase_intent/__init__.py
+      hash: md5
+      md5: ab91f9df5af0ca2f95db62cbc077ad1c
+      size: 192
+      isexec: true
+    - path: src/purchase_intent/config.py
+      hash: md5
+      md5: cfbc106c8ee66eb387245a4ea386cd89
+      size: 5430
+      isexec: true
+    - path: src/purchase_intent/data_schema.py
+      hash: md5
+      md5: 04cdf6e2b3b7aac216e583d7e5646410
+      size: 3917
+      isexec: true
+    - path: src/purchase_intent/data_split.py
+      hash: md5
+      md5: 5ae46959a865a812edbbf146e4f6b706
+      size: 5786
+      isexec: true
+    - path: src/purchase_intent/data_validation.py
+      hash: md5
+      md5: 7fbd9ee90618e5697c84a50e547137e6
+      size: 6774
+      isexec: true
+    - path: src/purchase_intent/schema.py
+      hash: md5
+      md5: bd36d63cd5b92948874cbc6abd3bcefc
+      size: 83
+      isexec: true
+    params:
+      configs/params.yaml:
+        dataset.target_column: Revenue
+        seed: 42
+        split.stratify: true
+        split.test_size: 0.2
+    outs:
+    - path: reports/data_validation.json
+      hash: md5
+      md5: 3c2dddaa5820392fb94f720ec446efa2
+      size: 1200

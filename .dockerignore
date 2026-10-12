@@ -3,6 +3,7 @@
 .gitignore
 .dvc/
 .venv/
+poetry.toml
 venv/
 
 __pycache__/
