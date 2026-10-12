@@ -1,0 +1,55 @@
+# Orquestração local: servidor MLflow + execução do pipeline.
+#
+# O Model Registry do MLflow NÃO funciona com backend de arquivo (file:./mlruns):
+# exige banco de dados. Por isso o servidor sobe com SQLite, que é suficiente
+# para o escopo do projeto e não adiciona um container de banco.
+
+services:
+  mlflow:
+    image: tc-f2-purchase-intent:latest
+    build:
+      context: .
+      target: runtime
+    # A imagem tem ENTRYPOINT de pipeline; aqui ela serve de servidor.
+    entrypoint: []
+    command:
+      - mlflow
+      - server
+      - --backend-store-uri=sqlite:////mlflow/mlflow.db
+      - --artifacts-destination=/mlflow/artifacts
+      - --serve-artifacts
+      - --host=0.0.0.0
+      - --port=5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    healthcheck:
+      # A imagem é slim e não tem curl; o próprio Python faz a verificação.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  pipeline:
+    image: tc-f2-purchase-intent:latest
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      # Dentro da rede do compose, o serviço é alcançado pelo nome.
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT_NAME: purchase-intent
+      MLFLOW_REGISTERED_MODEL_NAME: purchase-intent-classifier
+
+volumes:
+  mlflow-data:

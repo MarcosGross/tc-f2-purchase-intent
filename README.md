@@ -226,51 +226,92 @@ para a decisão de armazenamento compartilhado.
 
 #### Executar no Docker
 
-Com o bruto disponível e Docker iniciado:
+A imagem tem **dois modos de uso**, ambos a partir do mesmo build:
 
 ```powershell
-docker build -t tc-f2-purchase-intent:etapa3 .
-docker run --rm --mount "type=bind,source=$($PWD.Path),target=/app" tc-f2-purchase-intent:etapa3
+docker build -t tc-f2-purchase-intent:latest .
+```
+
+O Dockerfile instala as dependências pelo `poetry.lock` em um estágio separado,
+com a base Python fixada por digest. O runtime executa como `app` (uid 1000),
+em ambiente Linux com venv em `/opt/venv` — a `.venv` do Windows não é usada.
+O comando padrão é `python -m dvc repro --single-item prepare validate`; não há
+porta nem servidor a iniciar. Os dois stages são executados explicitamente para
+que uma reprodução forçada não tente refazer o ponteiro do snapshot bruto, o que
+alteraria suas permissões em alguns mounts Windows. **Se o grafo for ampliado,
+revisem também a lista de stages do `ENTRYPOINT`.**
+
+##### Modo 1 — autocontido (padrão)
+
+A imagem carrega a receita (`dvc.yaml`, `dvc.lock`, `.dvc/`), os parâmetros, o
+código e o snapshot bruto (1,07 MB). Um `git init` vazio é criado no build,
+porque o DVC exige um repositório para operar — nenhum histórico entra na imagem.
+
+```powershell
+docker run --rm tc-f2-purchase-intent:latest
+```
+
+Executa o pipeline do zero, sem montar nada. As saídas ficam dentro do container
+e são descartadas com `--rm`. É o modo para demonstrar e avaliar.
+
+##### Modo 2 — bind mount (desenvolvimento)
+
+Monta o checkout em `/app`, cobrindo o conteúdo da imagem com o do host:
+
+```powershell
+docker run --rm --mount "type=bind,source=$($PWD.Path),target=/app" tc-f2-purchase-intent:latest
 if ($LASTEXITCODE -ne 0) { throw 'Falha no pipeline Docker.' }
 Get-Content -LiteralPath 'reports/data_validation.json'
 ```
 
-O Dockerfile instala dependências pelo lock usando Poetry em um estágio
-separado. A base Python está fixada por digest. O runtime executa como `app`
-(uid 1000), com ambiente Linux em `/opt/venv`, sem usar a `.venv` Windows.
-O comando padrão é `python -m dvc repro --single-item prepare validate`;
-não há porta/servidor a iniciar. Ambos os estágios são executados explicitamente.
-Isso evita reproduzir o ponteiro do snapshot bruto durante uma execução forçada,
-o que tentaria alterar suas permissões em alguns mounts Windows. As entradas
-continuam declaradas e verificadas por cada estágio; o bruto é somente leitura
-para os programas de preparação/validação.
-Se o grafo for ampliado, revisem também a lista de stages do `ENTRYPOINT`.
+Aqui as saídas são gravadas no checkout e **permanecem depois que o container
+sai** — `--rm` remove apenas o container. É o modo para iterar no pipeline. O
+`.dockerignore` filtra o build, mas não a pasta montada.
 
-O **checkout inteiro precisa ser montado em `/app`**, incluindo `.git`, `.dvc`,
-receita e dados. Esta imagem é de reprodução local com bind mount obrigatório;
-ela não incorpora dados ou configuração pessoal no build. `.dockerignore`
-filtra o build, mas não a pasta montada. O processo grava outputs nessa pasta e
-termina; `--rm` remove apenas o container, preservando os arquivos do checkout.
-
-Faça `dvc pull/push` no host quando seu remote for um caminho Windows:
-`C:\...` não existe no Linux do container. Mudou o lock? Sincronize o ambiente e
-reconstrua a imagem. Mudanças somente de dados/parâmetros são lidas da montagem.
-
-Para comprovar que os dois estágios realmente executaram dentro do container,
-sem apenas aproveitar resultados já existentes:
+Para comprovar que os dois stages realmente executaram, sem aproveitar
+resultados já existentes:
 
 ```powershell
-docker run --rm --mount "type=bind,source=$($PWD.Path),target=/app" tc-f2-purchase-intent:etapa3 --force --no-run-cache
+docker run --rm --mount "type=bind,source=$($PWD.Path),target=/app" tc-f2-purchase-intent:latest --force --no-run-cache
 if ($LASTEXITCODE -ne 0) { throw 'Falha na reprodução forçada.' }
 poetry run dvc status
 ```
 
+Faça `dvc pull/push` no host quando seu remote for um caminho Windows: `C:\...`
+não existe no Linux do container. Mudou o lock? Sincronize o ambiente e
+reconstrua a imagem. Mudanças apenas de dados ou parâmetros são lidas da
+montagem.
+
 Em uma máquina com dependências nativas funcionais, a execução local equivalente
-é `poetry run dvc repro --single-item prepare validate`. Na máquina de validação,
-o Windows bloqueou uma DLL do
-Scikit-Learn com uma política de Controle de Aplicativo. O caminho comprovado
-para executar o pipeline e os testes foi o Docker Linux; não foi comprovada a
-igualdade dos outputs entre execução nativa Windows e Linux nessa máquina.
+é `poetry run dvc repro --single-item prepare validate`. Na máquina de validação
+da Etapa 3, o Windows bloqueou uma DLL do Scikit-Learn com uma política de
+Controle de Aplicativo; o caminho comprovado para executar pipeline e testes foi
+o Docker Linux. Não foi comprovada a igualdade dos outputs entre execução nativa
+Windows e Linux nessa máquina.
+
+#### Servidor MLflow (docker compose)
+
+O `docker-compose.yml` sobe um servidor MLflow e deixa o pipeline conectado a
+ele. Os dois serviços reaproveitam a mesma imagem, para que cliente e servidor
+usem a versão de MLflow travada no `poetry.lock`.
+
+```powershell
+docker compose up -d mlflow       # servidor em http://localhost:5000
+docker compose run --rm pipeline  # pipeline apontando para o servidor
+docker compose down               # remove os containers; o volume persiste
+```
+
+> **O Model Registry do MLflow não funciona com backend de arquivo.**
+> `file:./mlruns` serve para tracking de experimentos, mas `register_model()`
+> exige banco de dados. Por isso o serviço sobe com
+> `--backend-store-uri=sqlite:////mlflow/mlflow.db`. Isso foi verificado contra
+> este servidor: modelo registrado, listado e removido com sucesso.
+
+O banco e os artefatos ficam no volume nomeado `mlflow-data`, que sobrevive ao
+`docker compose down`. O serviço roda como `app`, e por isso `/mlflow` é criado
+na imagem já com esse dono: volume nomeado herda a propriedade do diretório que
+existe na imagem. O healthcheck usa o próprio Python, porque a base `slim` não
+traz `curl`.
 
 #### Testes e qualidade
 
@@ -320,6 +361,6 @@ correspondem à Etapa 3 oficial do enunciado; os marcos 5 e 6 permanecem futuros
 - [x] **Etapa 1** — Estrutura do repositório e esqueleto dos módulos
 - [x] **Etapa 2** — Poetry, dependências e implementação da ingestão
 - [x] **Etapa 3** — Pipeline DVC (`prepare → validate`, YAML e lock)
-- [x] **Etapa 4** — Docker e instruções de execução da Etapa 3 oficial
+- [x] **Etapa 4** — Docker: imagem autocontida, compose e servidor MLflow
 - [ ] **Etapa 5** — Treino, avaliação e tracking no MLflow
 - [ ] **Etapa 6** — Model Registry e inferência
