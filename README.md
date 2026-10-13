@@ -250,8 +250,15 @@ porque o DVC exige um repositório para operar — nenhum histórico entra na im
 docker run --rm tc-f2-purchase-intent:latest
 ```
 
-Executa o pipeline do zero, sem montar nada. As saídas ficam dentro do container
-e são descartadas com `--rm`. É o modo para demonstrar e avaliar.
+Executa o pipeline do zero, sem montar nada. É o modo para provar que a imagem
+roda sozinha.
+
+> ⚠️ **Neste modo os experimentos NÃO ficam rastreados.** Sem `.env` e sem a
+> rede do compose, o `config.py` cai no padrão `sqlite:///mlflow.db` e o MLflow
+> grava num banco **dentro do container**. O stage `register` conclui e anuncia
+> sucesso, mas o `--rm` apaga banco, modelo, métricas e `dvc.lock` junto com o
+> container. Use este modo como teste de fumaça; para rastrear de verdade, use
+> o compose abaixo.
 
 ##### Modo 2 — bind mount (desenvolvimento)
 
@@ -306,8 +313,12 @@ docker compose down               # remove os containers; o volume persiste
 > o SQLite local grava dentro do container e os experimentos se perdem no
 > `docker run --rm`; aqui, banco e artefatos ficam no volume nomeado.
 
-O banco e os artefatos ficam no volume nomeado `mlflow-data`, que sobrevive ao
-`docker compose down`. O serviço roda como `app`, e por isso `/mlflow` é criado
+O serviço `pipeline` monta o checkout em `/app`, então `metrics.json`,
+`registry.json`, `models/trained_pipeline` e o `dvc.lock` atualizado ficam no
+repositório ao final — é este o caminho que produz os artefatos versionáveis.
+
+O banco e os artefatos do MLflow ficam no volume nomeado `mlflow-data`, que
+sobrevive ao `docker compose down`. O serviço roda como `app`, e por isso `/mlflow` é criado
 na imagem já com esse dono: volume nomeado herda a propriedade do diretório que
 existe na imagem. O healthcheck usa o próprio Python, porque a base `slim` não
 traz `curl`.
