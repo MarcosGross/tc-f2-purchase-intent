@@ -140,8 +140,8 @@ stages:
       md5: 3c2dddaa5820392fb94f720ec446efa2
       size: 1200
   train:
-    cmd: python -m purchase_intent.train --train data/processed/train.csv 
-      --model-output models/trained_pipeline --run-id-output 
+    cmd: python -m purchase_intent.train --train data/processed/train.csv
+      --model-output models/trained_pipeline --run-id-output
       reports/train_run_id.txt --params configs/params.yaml
     deps:
     - path: data/processed/train.csv
@@ -208,8 +208,8 @@ stages:
       md5: 7b9a4d39299197eaa9fd740e2b526ddb
       size: 33
   evaluate:
-    cmd: python -m purchase_intent.evaluation --test data/processed/test.csv 
-      --model models/trained_pipeline --run-id reports/train_run_id.txt 
+    cmd: python -m purchase_intent.evaluation --test data/processed/test.csv
+      --model models/trained_pipeline --run-id reports/train_run_id.txt
       --metrics reports/metrics.json --params configs/params.yaml
     deps:
     - path: data/processed/test.csv
@@ -265,8 +265,8 @@ stages:
       md5: fcc25d4c44ac3a068055346fd498c12f
       size: 208
   register:
-    cmd: python -m purchase_intent.registry --run-id reports/train_run_id.txt 
-      --metrics reports/metrics.json --params configs/params.yaml --report 
+    cmd: python -m purchase_intent.registry --run-id reports/train_run_id.txt
+      --metrics reports/metrics.json --params configs/params.yaml --report
       reports/registry.json
     deps:
     - path: models/trained_pipeline
