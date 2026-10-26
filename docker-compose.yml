@@ -45,8 +45,16 @@ services:
     depends_on:
       mlflow:
         condition: service_healthy
+    volumes:
+      # Monta o checkout para que `dvc.lock`, métricas e modelo fiquem no
+      # repositório. Sem isto as saídas morrem junto com o container, e o
+      # `dvc.lock` — que é a prova de reprodutibilidade no git — nunca atualiza.
+      - type: bind
+        source: .
+        target: /app
     environment:
       # Dentro da rede do compose, o serviço é alcançado pelo nome.
+      # Como `load_dotenv` usa override=False, esta variável vence um .env local.
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MLFLOW_EXPERIMENT_NAME: purchase-intent
       MLFLOW_REGISTERED_MODEL_NAME: purchase-intent-classifier

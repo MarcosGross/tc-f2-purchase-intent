@@ -53,5 +53,6 @@ RUN mkdir -p /mlflow/artifacts && chown -R app:app /mlflow
 USER app
 # O DVC exige um repositório git. Um init vazio basta: nenhum histórico entra na imagem.
 RUN git init -q .
-# O snapshot bruto é entrada; forçar reprodução deve executar somente os stages de dados.
-ENTRYPOINT ["python", "-m", "dvc", "repro", "--single-item", "prepare", "validate"]
+# O snapshot bruto é entrada; a lista explícita reproduz todo o pipeline de ML sem
+# tentar refazer o ponteiro do bruto numa reprodução forçada.
+ENTRYPOINT ["python", "-m", "dvc", "repro", "--single-item", "prepare", "validate", "train", "evaluate", "register"]
