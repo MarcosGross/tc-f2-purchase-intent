@@ -241,11 +241,41 @@ cobertura completa e disjunta, receita do split e preservação de registros e a
 Uma falha remove o relatório anterior de sucesso. Os CSVs e JSONs dos dados usam
 UTF-8/LF e formato determinístico; a comparação numérica usa tolerância de `1e-12`.
 
-O modelo é um `RandomForestClassifier` com 300 árvores, `class_weight=balanced`
-e `random_state=42`. Números são preservados e categorias recebem one-hot
+O modelo promovido é um `HistGradientBoostingClassifier` (`learning_rate=0,05`,
+`max_iter=200`, `max_leaf_nodes=31`, `min_samples_leaf=20`, `random_state=42`),
+vencedor do benchmark comparativo descrito em
+[Resultados e validação](#resultados-e-validação). Números são preservados e categorias recebem one-hot
 encoding com suporte a categorias desconhecidas. Códigos como `Browser`,
 `Region` e `TrafficType` são tratados como categorias nominais. O encoder é
 ajustado somente no treino e serializado junto com o classificador.
+
+### Paradigma: funcional
+
+O pipeline é estruturado de forma **funcional**, não orientada a objetos. A
+medição do código-fonte: **66 funções de módulo e 5 classes — todas
+`@dataclass(frozen=True)`, nenhuma com métodos**.
+
+A escolha é deliberada. O comportamento vive em funções de módulo que recebem o
+que precisam e devolvem o resultado; os dados que atravessam o pipeline viajam
+em registros imutáveis (`Settings`, `DataParameters`, `DatasetSummary`,
+`DataSplits`, `ValidationPaths`). Não há estado mutável compartilhado nem
+hierarquia de herança.
+
+Duas consequências práticas:
+
+- **Testabilidade.** Uma função pura como `compute_metrics` é verificada com um
+  `assert` direto, sem mock nem fixture de objeto. Funções que tocam disco ou
+  rede (`load_*`, `save_*`) ficam isoladas e nomeadas como tal.
+- **Fronteira de estágio.** Cada módulo expõe `main()` e é invocado pelo DVC
+  como processo independente. Objetos de longa vida não sobreviveriam entre
+  estágios de qualquer forma — o processo termina. Funções puras e dados
+  serializáveis são a forma natural para esse desenho.
+
+A exceção é o `Pipeline` do Scikit-Learn, que é um objeto. Ele é usado por
+**composição, não por herança**: `build_preprocessor` e `build_estimator`
+devolvem peças que `build_pipeline` monta, e o conjunto é serializado inteiro.
+Estender a biblioteca por subclasse quebraria a serialização que faz treino e
+inferência aplicarem exatamente a mesma transformação.
 
 ## Configuração
 
