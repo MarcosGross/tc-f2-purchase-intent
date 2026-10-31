@@ -135,53 +135,62 @@ stages:
       hash: md5
       md5: efbce4c3be662403929ba0e80d8d77cb
       size: 515856
+      isexec: true
     - path: pyproject.toml
       hash: md5
       md5: 3fcc12a4f597d56d660add3eb121e1df
       size: 2411
+      isexec: true
     - path: src/purchase_intent/config.py
       hash: md5
       md5: 932fdb7aa581f28d1f7cd9d0b4001164
       size: 5436
+      isexec: true
     - path: src/purchase_intent/data_schema.py
       hash: md5
       md5: 04cdf6e2b3b7aac216e583d7e5646410
       size: 3917
+      isexec: true
     - path: src/purchase_intent/data_split.py
       hash: md5
       md5: 5ae46959a865a812edbbf146e4f6b706
       size: 5786
+      isexec: true
     - path: src/purchase_intent/preprocessing.py
       hash: md5
       md5: 162d26f5d51004efe77403711f4dae0d
       size: 2984
+      isexec: true
     - path: src/purchase_intent/schema.py
       hash: md5
       md5: bd36d63cd5b92948874cbc6abd3bcefc
       size: 83
+      isexec: true
     - path: src/purchase_intent/train.py
       hash: md5
       md5: 7a8c2f92809ef54e0f87445eb5c3e8d0
       size: 8450
+      isexec: true
     params:
       configs/params.yaml:
         dataset.target_column: Revenue
-        model.name: random_forest
+        model.name: hist_gradient_boosting
         model.params:
-          n_estimators: 300
-          max_depth:
-          class_weight: balanced
+          learning_rate: 0.05
+          max_iter: 200
+          max_leaf_nodes: 31
+          min_samples_leaf: 20
         seed: 42
     outs:
     - path: models/trained_pipeline
       hash: md5
-      md5: a0b3771909d0235a6f2922cfdf07d30b.dir
-      size: 60422603
+      md5: fb97f1bb777213bc11c6dd135a9251c7.dir
+      size: 733000
       nfiles: 7
     - path: reports/train_run_id.txt
       hash: md5
-      md5: 4ff18ade0d88adf74acf65505b7debeb
-      size: 34
+      md5: 167e5b69e440d3b609f3cd05193d23ad
+      size: 33
   evaluate:
     cmd: python -m purchase_intent.evaluation --test data/processed/test.csv 
       --model models/trained_pipeline --run-id reports/train_run_id.txt 
@@ -193,37 +202,43 @@ stages:
       size: 231648
     - path: models/trained_pipeline
       hash: md5
-      md5: a0b3771909d0235a6f2922cfdf07d30b.dir
-      size: 60422603
+      md5: fb97f1bb777213bc11c6dd135a9251c7.dir
+      size: 733000
       nfiles: 7
     - path: poetry.lock
       hash: md5
       md5: efbce4c3be662403929ba0e80d8d77cb
       size: 515856
+      isexec: true
     - path: pyproject.toml
       hash: md5
       md5: 3fcc12a4f597d56d660add3eb121e1df
       size: 2411
+      isexec: true
     - path: reports/train_run_id.txt
       hash: md5
-      md5: 4ff18ade0d88adf74acf65505b7debeb
-      size: 34
+      md5: 167e5b69e440d3b609f3cd05193d23ad
+      size: 33
     - path: src/purchase_intent/config.py
       hash: md5
       md5: 932fdb7aa581f28d1f7cd9d0b4001164
       size: 5436
+      isexec: true
     - path: src/purchase_intent/data_schema.py
       hash: md5
       md5: 04cdf6e2b3b7aac216e583d7e5646410
       size: 3917
+      isexec: true
     - path: src/purchase_intent/data_split.py
       hash: md5
       md5: 5ae46959a865a812edbbf146e4f6b706
       size: 5786
+      isexec: true
     - path: src/purchase_intent/evaluation.py
       hash: md5
       md5: 430b6ca2efff134a49ac8351385a5923
       size: 5399
+      isexec: true
     params:
       configs/params.yaml:
         dataset.target_column: Revenue
@@ -231,8 +246,8 @@ stages:
     outs:
     - path: reports/metrics.json
       hash: md5
-      md5: 10f9e52b570c8d44e6c8530e6a9547ce
-      size: 208
+      md5: 59aaaa4d95c82afafe6fedc6a2266f2f
+      size: 207
   register:
     cmd: python -m purchase_intent.registry --run-id reports/train_run_id.txt 
       --metrics reports/metrics.json --params configs/params.yaml --report 
@@ -240,41 +255,47 @@ stages:
     deps:
     - path: models/trained_pipeline
       hash: md5
-      md5: a0b3771909d0235a6f2922cfdf07d30b.dir
-      size: 60422603
+      md5: fb97f1bb777213bc11c6dd135a9251c7.dir
+      size: 733000
       nfiles: 7
     - path: poetry.lock
       hash: md5
       md5: efbce4c3be662403929ba0e80d8d77cb
       size: 515856
+      isexec: true
     - path: pyproject.toml
       hash: md5
       md5: 3fcc12a4f597d56d660add3eb121e1df
       size: 2411
+      isexec: true
     - path: reports/metrics.json
       hash: md5
-      md5: 10f9e52b570c8d44e6c8530e6a9547ce
-      size: 208
+      md5: 59aaaa4d95c82afafe6fedc6a2266f2f
+      size: 207
     - path: reports/train_run_id.txt
       hash: md5
-      md5: 4ff18ade0d88adf74acf65505b7debeb
-      size: 34
+      md5: 167e5b69e440d3b609f3cd05193d23ad
+      size: 33
     - path: src/purchase_intent/config.py
       hash: md5
       md5: 932fdb7aa581f28d1f7cd9d0b4001164
       size: 5436
+      isexec: true
     - path: src/purchase_intent/data_schema.py
       hash: md5
       md5: 04cdf6e2b3b7aac216e583d7e5646410
       size: 3917
+      isexec: true
     - path: src/purchase_intent/registry.py
       hash: md5
       md5: 88a994e70a78f03301e7119c7d70e8f6
       size: 5008
+      isexec: true
     - path: src/purchase_intent/train.py
       hash: md5
       md5: 7a8c2f92809ef54e0f87445eb5c3e8d0
       size: 8450
+      isexec: true
     params:
       configs/params.yaml:
         evaluation.primary_metric: roc_auc
@@ -282,5 +303,5 @@ stages:
     outs:
     - path: reports/registry.json
       hash: md5
-      md5: fe755dd94f6c14b3acba074de0239128
+      md5: 9b1e3a4b85edf96d0fd94e68822e20f1
       size: 241
