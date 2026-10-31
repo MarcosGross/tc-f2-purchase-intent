@@ -428,16 +428,52 @@ específicos de modelagem e promoção permanecem como melhoria.
 
 ## Resultados e validação
 
-Resultados do baseline na divisão de referência, com limiar de decisão 0,5:
+Resultados do modelo promovido (`hist_gradient_boosting`, sem balanceamento)
+na divisão de referência, com limiar de decisão 0,5:
 
 | Métrica | Valor |
 |---|---:|
-| ROC AUC | 0,9195 |
-| Average precision | 0,7172 |
-| Accuracy | 0,8885 |
-| Precision | 0,6271 |
-| Recall | 0,6911 |
-| F1 | 0,6575 |
+| ROC AUC | 0,9287 |
+| Average precision | 0,7287 |
+| Accuracy | 0,8994 |
+| Precision | 0,7161 |
+| Recall | 0,5812 |
+| F1 | 0,6416 |
+
+### Benchmark comparativo
+
+O módulo `run_benchmark.py` executa seis experimentos — três famílias de
+algoritmos, cada uma com e sem balanceamento de classes — sobre os mesmos
+conjuntos de treino e teste. Registra todos no MLflow e promove o melhor para
+o alias configurado:
+
+```powershell
+docker compose up -d --wait mlflow
+docker compose run --rm --entrypoint python pipeline -m purchase_intent.run_benchmark
+```
+
+O `--entrypoint python` substitui o `ENTRYPOINT` da imagem, que é `dvc repro`.
+A execução grava `reports/benchmark_comparison.json` (não versionado) e imprime
+a tabela abaixo.
+
+| Experimento | Algoritmo | Balanceado | ROC-AUC | PR-AUC | Accuracy | Precision | Recall | F1 |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Logistic Regression | `logistic_regression` | Não | 0,8828 | 0,6189 | 0,8808 | 0,7366 | 0,3586 | 0,4824 |
+| Logistic Regression | `logistic_regression` | Sim | 0,8932 | 0,6224 | 0,8410 | 0,4913 | 0,7435 | 0,5917 |
+| Random Forest | `random_forest` | Não | 0,9178 | 0,7323 | 0,8986 | 0,8028 | 0,4581 | 0,5833 |
+| Random Forest | `random_forest` | Sim | 0,9201 | 0,7115 | 0,8633 | 0,5387 | 0,8194 | 0,6501 |
+| **HistGradientBoosting** | `hist_gradient_boosting` | **Não** | **0,9287** | 0,7287 | 0,8994 | 0,7161 | 0,5812 | 0,6416 |
+| HistGradientBoosting | `hist_gradient_boosting` | Sim | 0,9278 | 0,7314 | 0,8747 | 0,5698 | 0,7801 | 0,6586 |
+
+Quem escolhe o vencedor é `evaluation.primary_metric` no `params.yaml`, não o
+código. Com `roc_auc` vence o HistGradientBoosting sem balanceamento; com `f1`
+venceria a variante balanceada (0,6586). O `params.yaml` já está configurado
+com esse vencedor, de modo que `dvc repro` treina e promove o mesmo modelo.
+
+O balanceamento troca precisão por abrangência. No Random Forest, leva a
+precisão de 0,80 para 0,54 e o recall de 0,46 para 0,82. Qual lado interessa
+depende do custo de acionar um usuário que não compraria — é decisão de
+negócio, não de modelagem.
 
 `train` registra hiperparâmetros e modelo; `evaluate` acrescenta as métricas
 de teste à mesma run. `register` compara a métrica principal com a versão atual
@@ -460,6 +496,16 @@ Validação realizada em **28/10/2026**, no código-base `8d10f8d`:
   SHA-256 idêntico entre execução nativa Windows e Docker Linux. Essa comparação
   não inclui os arquivos binários ou metadados do modelo MLflow.
 
+Validação adicional em **31/10/2026**, na versão integrada:
+
+- Ruff e formatação aprovados; 37 testes aprovados no Docker Linux.
+- Os cinco estágios executaram pelo Compose contra o servidor MLflow.
+- Benchmark de seis experimentos registrado; `champion` promovido para o
+  HistGradientBoosting sem balanceamento (ROC AUC 0,9287).
+- Três execuções independentes do cenário vencedor — duas pelo benchmark e uma
+  pelo `dvc repro` — produziram ROC AUC idêntico até a 16ª casa decimal
+  (0,9286988373144677), por caminhos de código distintos.
+
 ## Entrega do Tech Challenge
 
 | Etapa oficial | Implementação |
@@ -467,7 +513,7 @@ Validação realizada em **28/10/2026**, no código-base `8d10f8d`:
 | 1 - Clean Code e estrutura | Módulos por responsabilidade, type hints, docstrings e Ruff |
 | 2 - Ambiente e dependências | Poetry, lock e configuração externalizada |
 | 3 - Containerização e versionamento | Docker, Compose, dataset e pipeline DVC |
-| 4 - Modelagem, Registry e entrega | Random Forest, tracking, avaliação, Registry e instruções; vídeo pendente |
+| 4 - Modelagem, Registry e entrega | Benchmark de 3 algoritmos, tracking, avaliação, Registry e instruções; vídeo pendente |
 
 - [x] Repositório com histórico de contribuição da equipe.
 - [x] Instalação, testes e pipeline validados.
