@@ -1,331 +1,415 @@
 # Propensão de Compra em E-commerce
 
-Sistema preditivo que estima a probabilidade de um usuário de e-commerce
-concluir uma compra a partir do seu comportamento de navegação na sessão.
+Sistema de classificação binária que estima a probabilidade de uma sessão de
+navegação resultar em compra.
 
-**Tech Challenge — Fase 2** · Pós Tech Machine Learning Engineering (FIAP)
+**Tech Challenge - Fase 2** · Pós Tech Machine Learning Engineering (FIAP)
+
 **Grupo:** Os Outliers
 
-As instruções abaixo documentam as Etapas 2 e 3 oficiais. O pipeline completo
-também inclui a **Etapa 4 oficial**: treinamento clássico, avaliação, MLflow
-Tracking e Model Registry.
+O projeto reúne ingestão e validação de dados, treinamento com Scikit-Learn,
+versionamento com DVC, rastreamento e Model Registry com MLflow e execução em
+Docker. O caminho principal deste guia usa Docker Compose para manter os
+experimentos e modelos disponíveis após o encerramento dos containers.
 
----
+## Problema e dados
 
-## Problema
+Uma empresa de e-commerce deseja identificar a propensão de compra a partir do
+comportamento de navegação. Cada registro representa uma sessão; o alvo booleano
+`Revenue` indica se houve compra. O modelo permite estudar como priorizar ações
+de retenção ou ofertas. A integração com uma loja e a previsão durante sessões
+em andamento ficam fora do escopo desta implementação.
 
-Lojas online conseguem observar o comportamento de navegação de uma sessão
-(páginas visitadas, tempo em cada categoria, taxa de rejeição, origem do
-tráfego, proximidade de datas comerciais), mas só descobrem se houve compra ao
-final. Antecipar essa intenção permite acionar retenção, recomendação ou
-desconto ainda durante a sessão.
+O dataset é o [Online Shoppers Purchasing Intention Dataset](https://archive.ics.uci.edu/dataset/468/online+shoppers+purchasing+intention+dataset),
+publicado pelo UCI Machine Learning Repository, id 468.
 
-Formalizamos o problema como **classificação binária**: dada uma sessão,
-prever se ela resultará em compra.
+| Característica | Valor |
+|---|---|
+| Registros | 12.330 sessões |
+| Colunas | 17 features e o alvo `Revenue` |
+| Sem compra (`False`) | 10.422 sessões, 84,53% |
+| Com compra (`True`) | 1.908 sessões, 15,47% |
+| Divisão de referência | 9.864 sessões de treino e 2.466 de teste |
+| Estratégia de divisão | Estratificada, 80%/20%, seed 42 |
 
-## Dados
-
-[Online Shoppers Purchasing Intention Dataset](https://archive.ics.uci.edu/dataset/468/online+shoppers+purchasing+intention+dataset)
-— UCI Machine Learning Repository (id 468). Cada linha representa uma sessão de
-navegação; a coluna `Revenue` indica se a sessão terminou em compra.
-
-O CSV bruto contém **12.330 sessões e 18 colunas**. A variável alvo `Revenue` é
-booleana: 10.422 sessões sem compra (`False`, 84,53%) e 1.908 com compra
-(`True`, 15,47%). A ingestão reportou estes tipos:
-
-| Tipo | Colunas |
+| Tipo no CSV bruto | Colunas |
 |---|---|
 | `int64` | `Administrative`, `Informational`, `ProductRelated`, `OperatingSystems`, `Browser`, `Region`, `TrafficType` |
 | `float64` | `Administrative_Duration`, `Informational_Duration`, `ProductRelated_Duration`, `BounceRates`, `ExitRates`, `PageValues`, `SpecialDay` |
 | `object` | `Month`, `VisitorType` |
 | `bool` | `Weekend`, `Revenue` |
 
-## Foco do projeto
+## Executar do zero com Docker Compose
 
-O objetivo desta fase é **engenharia de ML**, não sofisticação de modelagem. Por
-isso o modelo é um classificador clássico do Scikit-Learn, e o esforço está em:
+Os exemplos de terminal usam **PowerShell** e devem ser executados na raiz do
+repositório, salvo o comando inicial de clone.
 
-| Pilar | Ferramenta |
-|---|---|
-| Rastreamento de experimentos e registro de modelos | MLflow (+ Model Registry) |
-| Versionamento de dados e pipeline reprodutível | DVC |
-| Gestão de dependências e lock file | Poetry |
-| Empacotamento e execução isolada | Docker |
-| Qualidade de código | Ruff, type hints, docstrings |
+### 1. Preparar o ambiente
 
-## Estrutura
+Pré-requisitos: Git, Python **3.12**, Poetry **2.5.1** e Docker com containers
+Linux e Compose com suporte a `--wait`. O projeto aceita Python 3.11 e 3.12;
+3.12 é a versão usada na imagem e na validação de referência.
 
-```
-├── src/purchase_intent/   # código-fonte: um módulo por responsabilidade
-├── tests/                 # testes automatizados
-├── data/raw/              # dataset bruto        (versionado por DVC)
-├── data/processed/        # conjuntos de treino e teste (versionado por DVC)
-├── models/                # artefatos de modelo  (versionado por DVC)
-├── reports/               # validação de dados, métricas e registro do modelo
-├── configs/params.yaml    # parâmetros de dados e modelagem
-├── dvc.yaml               # pipeline de dados, treino, avaliação e registro
-├── dvc.lock               # identidades geradas pela execução do DVC
-├── Dockerfile             # ambiente Linux e alvo separado de testes
-└── docs/                  # ML Canvas e model card
-```
-
-### Módulos e stages do pipeline
-
-Cada módulo tem uma única responsabilidade. O pipeline DVC executa os stages na
-ordem `prepare → validate → train → evaluate → register`:
-
-| Módulo | Responsabilidade | Stage DVC |
-|---|---|---|
-| `config.py` | Carrega `.env` e `params.yaml`; fixa a semente | — |
-| `data_ingestion.py` | Baixa e lê o dataset bruto | Inicialização manual; bruto com ponteiro `.dvc` |
-| `data_split.py` | Divisão estratificada treino/teste | `prepare` |
-| `data_schema.py` | Schema, hashes e serialização compartilhados | — |
-| `data_validation.py` | Confere integridade, posições e alvo | `validate` |
-| `preprocessing.py` | `ColumnTransformer` compartilhado | — |
-| `train.py` | Treina o pipeline e registra a run no MLflow | `train` |
-| `evaluation.py` | Calcula métricas e grava `reports/metrics.json` | `evaluate` |
-| `registry.py` | Promove o modelo no MLflow Model Registry | `register` |
-| `inference.py` | Carrega o modelo promovido e prevê | — |
-
-`preprocessing.py` não é um stage por escolha de projeto: ele é importado tanto
-por `train.py` quanto por `inference.py` e é serializado dentro do `Pipeline`,
-garantindo que treino e inferência apliquem exatamente as mesmas transformações.
-
-## Configuração
-
-Duas fontes de configuração, com responsabilidades distintas:
-
-- **`.env`** — infraestrutura: URI do MLflow, caminhos e nível de log.
-  Não é versionado; use o `.env.example` como referência.
-- **`configs/params.yaml`** — decisões de modelagem: proporção do split,
-  hiperparâmetros, métrica de promoção. É versionado e será declarado como
-  `params:` no `dvc.yaml`, de modo que alterá-lo reexecute os stages afetados.
-  `seed` e `split.*` configuram a preparação; `model.*`, `evaluation.*` e
-  `registry.*` controlam treino, avaliação e promoção. `RANDOM_SEED` no `.env`
-  não controla o split. Os caminhos de entrada/saída são explícitos no DVC.
-
-Apenas `config.py` lê essas fontes; os demais módulos recebem a configuração
-pronta.
-
-### Ambiente e ingestão (Etapa 2)
-
-Requer Python 3.11 ou 3.12 e Poetry 2.0 ou superior. Na raiz do repositório:
-
-```bash
-poetry install
-cp .env.example .env  # no PowerShell: Copy-Item .env.example .env
-poetry run python -m purchase_intent.data_ingestion
-```
-
-O comando baixa o ZIP oficial do UCI, grava o CSV configurado em
-`RAW_DATA_PATH` e registra dimensões, tipos de coluna e distribuição de
-`Revenue` no log. O arquivo `.env` local não deve ser commitado. O
-`poetry.lock` fixa as versões resolvidas para que o grupo instale o mesmo
-conjunto de dependências.
-
-### Containerização e versionamento (Etapa 3 oficial)
-
-O enunciado usa `preprocess → train` como **exemplo** de estágios. Para entregar
-somente a etapa 3, o fluxo implementado é:
-
-```text
-CSV bruto (.dvc) → prepare → train.csv + test.csv + split_manifest.json
-                         → validate → reports/data_validation.json
-```
-
-`validate` depende do bruto e dos três arquivos preparados. A divisão preserva
-todas as 18 colunas, incluindo `Revenue`, sem encoding, scaling, seleção de
-features ou treino de modelo. Os nomes train/test identificam apenas conjuntos.
-
-| Arquivo | Controle | Finalidade |
-|---|---|---|
-| `data/raw/online_shoppers_intention.csv` | DVC, ponteiro individual | Dados originais |
-| `data/processed/train.csv` e `test.csv` | Outputs de `prepare` | Registros divididos, sem índice extra |
-| `data/processed/split_manifest.json` | Output de `prepare` | Hashes, parâmetros e posições do bruto |
-| `reports/data_validation.json` | Output de `validate` | Checks de integridade e distribuição de dados |
-| `dvc.yaml`, `dvc.lock`, `*.dvc` e código | Git | Receita e identidades da versão |
-
-O manifesto usa posições originais, permitindo preservar linhas de valores
-iguais sem confundi-las com a repetição da mesma posição. O validador confere
-hashes, schema, cobertura completa/disjunta e cada registro/alvo; também
-recalcula a divisão para conferir a receita. Números no round-trip CSV usam
-tolerância `rtol=atol=1e-12`. Saídas são UTF-8/LF, sem horário ou caminho pessoal.
-Uma falha retorna código diferente de zero e remove relatório antigo de sucesso.
-
-#### O que cada integrante precisa fazer
-
-| Situação | Ação |
-|---|---|
-| Vai apenas revisar código | Leia os diffs/README; não precisa baixar dados ou construir imagem |
-| Vai executar a etapa 3 | Obtenha esta versão do código, instale o ambiente, disponibilize o bruto e execute Docker conforme abaixo |
-| Já tem dados e ambiente dessa versão | Use `dvc pull` quando houver remote acessível e execute o pipeline; não reinicialize DVC |
-| Vai continuar o desenvolvimento | Use os arquivos/contratos de dados existentes e acrescente sua responsabilidade; não refaça o versionamento do bruto |
-
-O repositório já tem `.dvc/`; **não rode `dvc init` novamente**. O CSV bruto já
-tem um dono (`online_shoppers_intention.csv.dvc`); não crie outro estágio que
-produza esse mesmo caminho. Os CSVs preparados e o relatório pertencem ao YAML;
-não faça `dvc add` separado nessas saídas.
-
-#### Ambiente
-
-Use Python **3.12**, Poetry **2.5.1** e Docker com containers Linux. No Windows,
-Docker Desktop usa WSL 2; abra uma nova janela de PowerShell após instalar as
-ferramentas para atualizar o PATH. Execute os comandos na raiz do repositório:
+No Windows, mantenha o Docker Desktop iniciado e configurado para containers
+Linux. Após instalar as ferramentas, abra um novo terminal para atualizar o PATH.
 
 ```powershell
+git clone https://github.com/MarcosGross/tc-f2-purchase-intent.git
+Set-Location tc-f2-purchase-intent
+
 poetry env use 3.12
 poetry install
 poetry check --lock
-poetry run dvc version
 docker version
+docker compose version
+
+if (-not (Test-Path -LiteralPath .env)) {
+    Copy-Item -LiteralPath .env.example -Destination .env
+}
 ```
 
-Se Poetry não localizar Python 3.12, forneça a `poetry env use` o caminho do
-interpretador instalado. DVC e NumPy são dependências principais; Ruff e pytest
-são dependências de desenvolvimento. `.env`, `.venv`, `poetry.toml`, cache e
-configuração pessoal DVC ficam fora do Git.
+Para um checkout existente, comece por `poetry env use 3.12` na raiz do projeto.
+Se Poetry não localizar Python, informe o caminho do interpretador no comando
+`poetry env use`. As dependências de produção e desenvolvimento estão separadas
+no `pyproject.toml`, e o `poetry.lock` fixa as versões utilizadas.
 
-#### Dados: situação atual e compartilhamento
+### 2. Disponibilizar o dataset antes do build
 
-A validação inicial usou um **remote local**, fora do checkout e configurado com
-`--local`. Esse caminho pessoal não é distribuído pelo Git e não fica acessível
-a outra máquina. **A equipe ainda precisa escolher um storage compartilhado**
-para usar `dvc pull` em computadores diferentes.
-
-Quem já tem acesso a um remote válido deve configurá-lo e recuperar a versão:
+O repositório distribui o ponteiro DVC do bruto; o CSV deve ser recuperado ou
+baixado antes de construir a imagem. Enquanto não houver storage compartilhado
+configurado, use o download da fonte oficial:
 
 ```powershell
-# Substitua pelo endereço realmente acessível à sua máquina/equipe.
+poetry run python -m purchase_intent.data_ingestion
+if ($LASTEXITCODE -ne 0) { throw 'Falha no download do dataset.' }
+
+$expectedSha256 = 'b3055ee355f59134d851d32641183cb4a8b45def7124d2f50442a042f358e0d9'
+$rawHash = (Get-FileHash -LiteralPath 'data/raw/online_shoppers_intention.csv' -Algorithm SHA256).Hash
+if ($rawHash.ToLowerInvariant() -ne $expectedSha256) {
+    throw 'Dataset diferente do snapshot versionado. Confira a fonte antes de continuar.'
+}
+
+poetry run dvc commit data/raw/online_shoppers_intention.csv.dvc
+if ($LASTEXITCODE -ne 0) { throw 'Falha ao armazenar o snapshot no cache DVC.' }
+poetry run dvc status data/raw/online_shoppers_intention.csv.dvc
+```
+
+O hash confirma o snapshot esperado antes de gravá-lo no cache. O `dvc commit`
+disponibiliza os bytes para um futuro `dvc push`, usando o ponteiro existente.
+Quem já tem acesso a um remote pode usar `dvc pull` conforme a seção de
+[versionamento e compartilhamento](#versionamento-e-compartilhamento-com-dvc).
+
+### 3. Construir a imagem e executar o pipeline
+
+```powershell
+docker build -t tc-f2-purchase-intent:latest .
+if ($LASTEXITCODE -ne 0) { throw 'Falha no build da imagem.' }
+
+docker compose up -d --wait mlflow
+if ($LASTEXITCODE -ne 0) { throw 'Falha ao iniciar o servidor MLflow.' }
+
+docker compose run --rm pipeline
+if ($LASTEXITCODE -ne 0) { throw 'Falha na execução do pipeline.' }
+
+Get-Content -LiteralPath reports/metrics.json
+Get-Content -LiteralPath reports/registry.json
+```
+
+Abra o [MLflow local](http://localhost:5000) para consultar o experimento
+`purchase-intent`, os parâmetros, as métricas e o artefato `model` da run. Em
+**Models**, consulte `purchase-intent-classifier` e o alias `champion`.
+
+O serviço `pipeline` monta o checkout em `/app`. Assim, os datasets preparados,
+o modelo, os relatórios e as alterações no `dvc.lock` permanecem no host. O banco
+SQLite e os artefatos do servidor MLflow ficam no volume nomeado `mlflow-data`,
+com o prefixo do projeto Compose, montado em `/mlflow`.
+
+Uma execução sem alterações reutiliza o cache dos estágios. O estágio `register`
+é sempre verificado e reutiliza a versão já associada à mesma run. Para executar
+todos os estágios novamente e gerar uma nova run:
+
+```powershell
+docker compose run --rm pipeline --force --no-run-cache
+if ($LASTEXITCODE -ne 0) { throw 'Falha na reprodução completa.' }
+```
+
+### 4. Fazer inferência com o modelo promovido
+
+Mantenha o serviço MLflow iniciado. Este exemplo roda dentro do Docker, lê três
+sessões do teste e remove o alvo antes de prever. O nome do modelo, o alias e o
+limiar vêm da configuração do projeto.
+
+```powershell
+@'
+from pathlib import Path
+
+import pandas as pd
+
+from purchase_intent.config import load_params, load_settings
+from purchase_intent.data_schema import read_dataset
+from purchase_intent.inference import load_model, predict, predict_proba
+
+settings = load_settings()
+params = load_params(settings.params_path)
+alias = params["registry"]["alias"]
+model_uri = f"models:/{settings.mlflow_registered_model_name}@{alias}"
+threshold = float(params["evaluation"]["decision_threshold"])
+sessions = read_dataset(Path("data/processed/test.csv"))
+sessions = sessions.drop(columns=[params["dataset"]["target_column"]]).head(3)
+model = load_model(model_uri)
+result = pd.DataFrame({
+    "purchase_probability": predict_proba(model, sessions),
+    "predicted_purchase": predict(model, sessions, threshold),
+})
+print(result.to_string(index=False))
+'@ | docker compose run --rm -T --entrypoint python pipeline -
+if ($LASTEXITCODE -ne 0) { throw 'Falha na inferência.' }
+```
+
+Saída de referência:
+
+```text
+ purchase_probability  predicted_purchase
+             0.040000               False
+             0.146667               False
+             0.736667                True
+```
+
+Para novas sessões, forneça as mesmas 17 features do treinamento, com nomes e
+tipos compatíveis e sem a coluna `Revenue`. O pré-processamento já faz parte do
+modelo carregado; não é necessário ajustar outro encoder.
+
+### 5. Encerrar e retomar
+
+```powershell
+docker compose down
+```
+
+Esse comando remove os containers e a rede, preservando o volume do MLflow e os
+arquivos gravados no checkout. Para retomar, execute
+`docker compose up -d --wait mlflow` antes de consultar runs ou fazer inferência.
+A opção `down -v` remove o volume e, com ele, o banco e os artefatos MLflow desse
+ambiente.
+
+## Arquitetura e responsabilidades
+
+```text
+src/purchase_intent/   Código organizado por responsabilidade
+tests/                Testes de preparação e integridade de dados
+data/raw/             CSV bruto e seu ponteiro DVC
+data/processed/       Treino, teste e manifesto da divisão
+models/               Pipeline Scikit-Learn serializado
+reports/              Validação, run ID, métricas e registro do modelo
+configs/params.yaml   Seed, split, hiperparâmetros, avaliação e alias
+dvc.yaml              Estágios, dependências, parâmetros e saídas
+dvc.lock              Identidades da execução versionada
+pyproject.toml        Pacote, dependências e ferramentas de qualidade
+poetry.lock           Versões resolvidas das dependências
+Dockerfile            Imagens de runtime e de testes
+docker-compose.yml    Servidor MLflow persistente e execução do pipeline
+docs/                 Diretório reservado para documentação complementar
+```
+
+O comando padrão da imagem solicita explicitamente esta ordem:
+
+```text
+prepare -> validate -> train -> evaluate -> register
+```
+
+| Módulo | Responsabilidade | Estágio DVC |
+|---|---|---|
+| `config.py` | Leitura centralizada de ambiente e parâmetros | - |
+| `schema.py` e `data_schema.py` | Schema, hashes e serialização dos dados | - |
+| `data_ingestion.py` | Download e leitura do bruto | Inicialização manual |
+| `data_split.py` | Divisão estratificada e manifesto das posições | `prepare` |
+| `data_validation.py` | Verificação dos dados preparados contra o bruto | `validate` |
+| `preprocessing.py` | Construção do `ColumnTransformer` | Incorporado ao modelo |
+| `train.py` | Treinamento, parâmetros, modelo e run ID no MLflow | `train` |
+| `evaluation.py` | Métricas de teste e atualização da run | `evaluate` |
+| `registry.py` | Registro de versão e promoção pelo alias | `register` |
+| `inference.py` | Carregamento do modelo e previsões | - |
+
+No grafo atual, `validate` é um ramo de `prepare`; `train` ainda não depende de
+seu relatório. A lista explícita de estágios nos comandos deste guia garante a
+validação antes do treino. Uma chamada isolada a `dvc repro train` não inclui
+essa verificação. Se o pipeline ganhar estágios, atualize também o `ENTRYPOINT`.
+
+A preparação preserva as 18 colunas do bruto. O manifesto registra hashes,
+parâmetros e posições originais, distinguindo linhas de valores iguais de uma
+posição repetida. A validação confere schema, nulos, tipos, números finitos,
+cobertura completa e disjunta, receita do split e preservação de registros e alvo.
+Uma falha remove o relatório anterior de sucesso. Os CSVs e JSONs dos dados usam
+UTF-8/LF e formato determinístico; a comparação numérica usa tolerância de `1e-12`.
+
+O modelo é um `RandomForestClassifier` com 300 árvores, `class_weight=balanced`
+e `random_state=42`. Números são preservados e categorias recebem one-hot
+encoding com suporte a categorias desconhecidas. Códigos como `Browser`,
+`Region` e `TrafficType` são tratados como categorias nominais. O encoder é
+ajustado somente no treino e serializado junto com o classificador.
+
+## Configuração
+
+| Fonte | Responsabilidade |
+|---|---|
+| `.env` | Infraestrutura, fonte do dataset, caminhos e nível de log; arquivo local ignorado pelo Git |
+| `configs/params.yaml` | Seed, alvo, split, hiperparâmetros, limiar, métrica principal e alias; versionado no Git e rastreado pelo DVC |
+| `dvc.yaml` | Caminhos explícitos de entrada/saída e dependências de cada estágio |
+| `docker-compose.yml` | Serviços, rede, porta, volume e variáveis injetadas nos containers |
+
+O `.env.example` usa `MLFLOW_TRACKING_URI=http://localhost:5000` para clientes
+executados no host. O Compose injeta `http://mlflow:5000` no serviço `pipeline`:
+dentro de um container, `localhost` aponta para o próprio container. Para
+desenvolver com o checkout montado e tracking persistente, use o Compose.
+
+Variáveis já definidas no ambiente prevalecem sobre o `.env`. No Compose, os
+nomes de experimento e modelo também são definidos explicitamente no serviço.
+A seed efetiva do split e do Random Forest é a chave `seed` do YAML;
+`RANDOM_SEED` no `.env` não substitui esse parâmetro. Alterações nos caminhos
+dos estágios precisam ser refletidas no `dvc.yaml`.
+
+Após alterar dependências ou o lock, execute `poetry install` e reconstrua a
+imagem antes de usar o Compose. Código e parâmetros são lidos da montagem no
+Compose; a imagem autocontida precisa ser reconstruída para incorporar mudanças.
+
+## Versionamento e compartilhamento com DVC
+
+| Conteúdo | Controle |
+|---|---|
+| Código, configurações, `*.dvc`, `dvc.yaml` e `dvc.lock` | Git |
+| Bruto, CSVs preparados, manifesto, modelo e relatórios dos estágios | DVC |
+| Runs, métricas e versões do Model Registry no servidor | Banco e storage de artefatos MLflow |
+
+O DVC já está inicializado. O bruto pertence ao ponteiro
+`data/raw/online_shoppers_intention.csv.dvc`; as demais saídas pertencem aos
+estágios do YAML. Use esses contratos ao evoluir o projeto, sem criar outro
+produtor para os mesmos caminhos.
+
+### Recuperar uma versão
+
+**Situação atual:** o repositório não distribui um remote DVC. A equipe ainda
+precisa escolher e disponibilizar um storage compartilhado. Até lá, o download
+com conferência de hash da execução principal permite reconstruir as saídas.
+
+Com um storage realmente acessível à equipe, configure-o no host:
+
+```powershell
 poetry run dvc remote add --local -d team-storage 'CAMINHO_OU_URL_DO_STORAGE'
 poetry run dvc config --local cache.type copy
 poetry run dvc pull
 ```
 
-Se o remote já estiver cadastrado, confira `poetry run dvc remote list` e
-reutilize-o. Para compartilhar depois, escolham pasta de rede, SSH ou bucket,
-instalem a extensão DVC do backend por Poetry se necessária e enviem o conteúdo.
-O endereço não secreto pode ficar em `.dvc/config`; credenciais são locais ou
-variáveis de ambiente. Outro integrante deve comprovar um clone com `dvc pull`.
+Substitua o endereço pelo storage acordado. Se o remote já existe, consulte
+`poetry run dvc remote list` e reutilize-o. Instale via Poetry a extensão do
+backend escolhido quando necessária. O endereço compartilhável pode ser
+versionado em `.dvc/config`; credenciais ficam na configuração local ou no
+ambiente. Remotes com caminhos Windows devem ser acessados pelo DVC no host.
 
-**Alternativa enquanto não houver storage compartilhado:** baixe o mesmo bruto
-pelo comando da Etapa 2, sem refazer `dvc init` ou atualizar o ponteiro:
+O `dvc pull` recupera os arquivos versionados, incluindo o run ID. Ele não
+restaura o banco nem o storage MLflow. Se o ambiente MLflow for novo, siga a
+[recuperação de runs ausentes](#recuperar-runs-ausentes-no-mlflow).
 
-```powershell
-poetry run python -m purchase_intent.data_ingestion
-Get-FileHash -LiteralPath 'data/raw/online_shoppers_intention.csv' -Algorithm SHA256
-poetry run dvc status data/raw/online_shoppers_intention.csv.dvc
-```
+### Publicar uma versão de dados e código
 
-SHA-256 esperado do bruto desta versão:
-`b3055ee355f59134d851d32641183cb4a8b45def7124d2f50442a042f358e0d9`.
-Se for diferente, confira a fonte com a equipe antes de atualizar a identidade.
-O status do ponteiro deve estar atualizado. Os demais arquivos serão gerados
-pelo pipeline. O download é uma alternativa de reprodução, não um substituto
-para a decisão de armazenamento compartilhado.
-
-#### Executar no Docker
-
-A imagem tem **dois modos de uso**, ambos a partir do mesmo build:
+Após uma mudança intencional no bruto, confira a fonte e atualize o ponteiro
+com `poetry run dvc add data/raw/online_shoppers_intention.csv`. Para o snapshot
+original baixado pelo guia, o `dvc commit` já o colocou no cache. Execute e
+valide o pipeline antes de compartilhar:
 
 ```powershell
-docker build -t tc-f2-purchase-intent:latest .
+docker compose run --rm pipeline
+if ($LASTEXITCODE -ne 0) { throw 'Falha no pipeline; revise antes de distribuir.' }
+poetry run dvc push
+git status --short
+git diff --check
 ```
 
-O Dockerfile instala as dependências pelo `poetry.lock` em um estágio separado,
-com a base Python fixada por digest. O runtime executa como `app` (uid 1000),
-em ambiente Linux com venv em `/opt/venv` — a `.venv` do Windows não é usada.
-O comando padrão é `python -m dvc repro --single-item prepare validate train evaluate register`; não há
-porta nem servidor a iniciar. Os cinco stages são executados explicitamente para
-que uma reprodução forçada não tente refazer o ponteiro do snapshot bruto, o que
-alteraria suas permissões em alguns mounts Windows. **Se o grafo for ampliado,
-revisem também a lista de stages do `ENTRYPOINT`.**
+Registre no Git as alterações revisadas de código, parâmetros, ponteiro, YAML e
+lock. `git push` distribui código e metadados; `dvc push` distribui os conteúdos.
+Confirme a recuperação por outro integrante com um clone limpo e `dvc pull`.
+O compartilhamento de runs exige também acesso ao mesmo serviço MLflow e aos
+seus artefatos; o Compose deste guia é um ambiente local.
 
-##### Modo 1 — autocontido (padrão)
+## Recuperar runs ausentes no MLflow
 
-A imagem carrega a receita (`dvc.yaml`, `dvc.lock`, `.dvc/`), os parâmetros, o
-código e o snapshot bruto (1,07 MB). Um `git init` vazio é criado no build,
-porque o DVC exige um repositório para operar — nenhum histórico entra na imagem.
+Se o DVC reutilizar `reports/train_run_id.txt`, mas o banco MLflow não contiver
+essa run, o registro falhará com `Run ... not found`. Isso pode acontecer ao
+trocar o servidor, remover seu volume ou recuperar apenas os arquivos via DVC.
+
+Com o backend de destino disponível, gere uma nova run e reexecute os estágios
+que dependem dela, sem reutilizar o cache de execução:
+
+```powershell
+docker compose up -d --wait mlflow
+if ($LASTEXITCODE -ne 0) { throw 'Servidor MLflow indisponível.' }
+
+docker compose run --rm --entrypoint python pipeline -m dvc repro --single-item train evaluate register --force --no-run-cache
+if ($LASTEXITCODE -ne 0) { throw 'Falha ao reconstruir a run e seu registro.' }
+```
+
+Esse comando pressupõe que treino e teste já estejam disponíveis. Se também
+precisar reconstruir os dados preparados, execute o pipeline completo:
+
+```powershell
+docker compose run --rm pipeline --force --no-run-cache
+if ($LASTEXITCODE -ne 0) { throw 'Falha na reconstrução completa.' }
+```
+
+O procedimento cria uma run no backend escolhido e atualiza run ID, métricas,
+registro e lock; não recupera o histórico perdido. Para retomar o histórico
+existente, mantenha o banco e o storage de artefatos MLflow correspondentes.
+
+## Outros modos de execução
+
+### Teste de fumaça da imagem
+
+Depois de disponibilizar o bruto e construir a imagem, execute sem montagem:
 
 ```powershell
 docker run --rm tc-f2-purchase-intent:latest
+if ($LASTEXITCODE -ne 0) { throw 'Falha no teste de fumaça.' }
 ```
 
-Executa o pipeline do zero, sem montar nada. É o modo para provar que a imagem
-roda sozinha.
+A imagem inclui código, parâmetros, receita DVC e snapshot bruto. Usa SQLite
+dentro do container e executa os cinco estágios. As runs são rastreadas durante
+a execução, mas o `--rm` remove esse banco e as saídas ao final. Use esse modo
+para verificar a imagem e o Compose para preservar resultados.
 
-> ⚠️ **Neste modo os experimentos NÃO ficam rastreados.** Sem `.env` e sem a
-> rede do compose, o `config.py` cai no padrão `sqlite:///mlflow.db` e o MLflow
-> grava num banco **dentro do container**. O stage `register` conclui e anuncia
-> sucesso, mas o `--rm` apaga banco, modelo, métricas e `dvc.lock` junto com o
-> container. Use este modo como teste de fumaça; para rastrear de verdade, use
-> o compose abaixo.
+O Dockerfile instala as dependências de produção com Poetry em um estágio
+separado, usa uma base Python fixada por digest e executa o runtime como `app`
+(uid 1000), com venv Linux em `/opt/venv`. O repositório Git vazio criado na
+imagem permite ao DVC operar sem incorporar o histórico do checkout.
 
-##### Modo 2 — bind mount (desenvolvimento)
+### Execução nativa
 
-Monta o checkout em `/app`, cobrindo o conteúdo da imagem com o do host:
+Com o ambiente Poetry instalado e o servidor Compose iniciado, a configuração
+de exemplo permite executar no host:
 
 ```powershell
-docker run --rm --mount "type=bind,source=$($PWD.Path),target=/app" tc-f2-purchase-intent:latest
-if ($LASTEXITCODE -ne 0) { throw 'Falha no pipeline Docker.' }
-Get-Content -LiteralPath 'reports/metrics.json'
+poetry run dvc repro --single-item prepare validate train evaluate register
+if ($LASTEXITCODE -ne 0) { throw 'Falha no pipeline nativo.' }
 ```
 
-Aqui as saídas são gravadas no checkout e **permanecem depois que o container
-sai** — `--rm` remove apenas o container. É o modo para iterar no pipeline. O
-`.dockerignore` filtra o build, mas não a pasta montada.
-
-Para comprovar que todos os stages realmente executaram, sem aproveitar
-resultados já existentes:
+Para usar SQLite diretamente no host, selecione esse backend explicitamente.
+Ao mudar de backend, force os estágios para criar uma run correspondente:
 
 ```powershell
-docker run --rm --mount "type=bind,source=$($PWD.Path),target=/app" tc-f2-purchase-intent:latest --force --no-run-cache
-if ($LASTEXITCODE -ne 0) { throw 'Falha na reprodução forçada.' }
-poetry run dvc status
+$env:MLFLOW_TRACKING_URI = 'sqlite:///mlflow.db'
+poetry run dvc repro --single-item prepare validate train evaluate register --force --no-run-cache
+if ($LASTEXITCODE -ne 0) { throw 'Falha no pipeline com SQLite local.' }
+poetry run mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5001
 ```
 
-Faça `dvc pull/push` no host quando seu remote for um caminho Windows: `C:\...`
-não existe no Linux do container. Mudou o lock? Sincronize o ambiente e
-reconstrua a imagem. Mudanças apenas de dados ou parâmetros são lidas da
-montagem.
-
-Em uma máquina com dependências nativas funcionais, a execução local equivalente
-é `poetry run dvc repro --single-item prepare validate train evaluate register`. Na máquina de validação
-da Etapa 3, o Windows bloqueou uma DLL do Scikit-Learn com uma política de
-Controle de Aplicativo; o caminho comprovado para executar pipeline e testes foi
-o Docker Linux. Não foi comprovada a igualdade dos outputs entre execução nativa
-Windows e Linux nessa máquina.
-
-#### Servidor MLflow (docker compose)
-
-O `docker-compose.yml` sobe um servidor MLflow e deixa o pipeline conectado a
-ele. Os dois serviços reaproveitam a mesma imagem, para que cliente e servidor
-usem a versão de MLflow travada no `poetry.lock`.
+A UI desse banco estará em [localhost:5001](http://localhost:5001). Ela mostra
+as runs do SQLite local; a UI do Compose mostra as runs armazenadas no volume.
+Ao encerrar a UI com `Ctrl+C`, remova a seleção temporária para voltar ao `.env`:
 
 ```powershell
-docker compose up -d mlflow       # servidor em http://localhost:5000
-docker compose run --rm pipeline  # pipeline apontando para o servidor
-docker compose down               # remove os containers; o volume persiste
+Remove-Item Env:MLFLOW_TRACKING_URI
 ```
 
-> **O Model Registry do MLflow exige backend de banco de dados** — não funciona
-> com `file:./mlruns`. Duas opções atendem: um SQLite local
-> (`sqlite:///mlflow.db`) ou este servidor. O projeto usa o **servidor**, porque
-> o SQLite local grava dentro do container e os experimentos se perdem no
-> `docker run --rm`; aqui, banco e artefatos ficam no volume nomeado.
+## Testes e qualidade
 
-O serviço `pipeline` monta o checkout em `/app`, então `metrics.json`,
-`registry.json`, `models/trained_pipeline` e o `dvc.lock` atualizado ficam no
-repositório ao final — é este o caminho que produz os artefatos versionáveis.
-
-O banco e os artefatos do MLflow ficam no volume nomeado `mlflow-data`, que
-sobrevive ao `docker compose down`. O serviço roda como `app`, e por isso `/mlflow` é criado
-na imagem já com esse dono: volume nomeado herda a propriedade do diretório que
-existe na imagem. O healthcheck usa o próprio Python, porque a base `slim` não
-traz `curl`.
-
-#### Testes e qualidade
-
-O alvo `test` inclui ferramentas de desenvolvimento sem adicioná-las ao runtime:
+A imagem `test` inclui dependências de desenvolvimento, separadas do runtime:
 
 ```powershell
 docker build --target test -t tc-f2-purchase-intent:tests .
@@ -336,75 +420,76 @@ poetry check --lock
 git diff --check
 ```
 
-Com dependências nativas funcionais, pode-se usar `poetry run pytest`,
+No ambiente nativo, os equivalentes são `poetry run pytest`,
 `poetry run ruff check src tests` e `poetry run ruff format --check src tests`.
-As fixtures são locais, pequenas e sem download de rede.
+As fixtures são pequenas, locais e não dependem de download. A suíte atual verifica divisão,
+reprodutibilidade, parâmetros, manifesto, integridade e CLI de dados; testes
+específicos de modelagem e promoção permanecem como melhoria.
 
-Validação da etapa 3 em 03/10/2026: 27 testes passaram no Linux/Docker; Ruff,
-formatação e lock passaram. A execução real dos dois estágios produziu
-9.864/2.466 linhas, mantendo as 18 colunas. Reexecução sem mudança usa cache;
-execução forçada preserva hashes por arquivo. A mudança de `test_size` de 0,2
-para 0,25 invalida a receita; o retorno a 0,2 recupera a versão de referência.
-Um clone local novo, sem CSV ou configuração pessoal, recuperou os cinco
-arquivos pelo DVC a partir do storage montado no container e executou ambos os
-estágios, preservando os SHA-256 por arquivo. Metadados de permissões (`isexec`)
-no lock podem variar entre mounts Windows e arquivos recuperados no Linux;
-essa diferença observada não alterou o conteúdo dos dados.
+## Resultados e validação
 
-#### Atualizar e distribuir uma versão
+Resultados do baseline na divisão de referência, com limiar de decisão 0,5:
 
-Para mudanças intencionais no bruto, confira a fonte, atualize seu ponteiro com
-`dvc add`, execute o pipeline e valide. Envie os conteúdos com `dvc push` e
-registre código/parâmetros/ponteiro/YAML/lock coerentes no Git. `git push`
-distribui código e metadados; `dvc push` distribui os conteúdos. Quem apenas
-consome a versão não precisa refazer essa preparação ou mudar os ponteiros.
+| Métrica | Valor |
+|---|---:|
+| ROC AUC | 0,9195 |
+| Average precision | 0,7172 |
+| Accuracy | 0,8885 |
+| Precision | 0,6271 |
+| Recall | 0,6911 |
+| F1 | 0,6575 |
 
-Branch de implementação: `feat/etapa-3-dvc-docker`, com commits separados por
-dependências, dataset, preparação, validação, pipeline, Docker e documentação.
-O compartilhamento da branch e sua integração seguem a revisão da equipe.
+`train` registra hiperparâmetros e modelo; `evaluate` acrescenta as métricas
+de teste à mesma run. `register` compara a métrica principal com a versão atual
+e aponta `champion` para o candidato quando seu ROC AUC não é inferior. A
+repetição do registro da mesma run reutiliza a versão existente. As métricas
+descrevem este baseline; não demonstram impacto comercial ou desempenho futuro.
 
-### Modelagem e MLflow (Etapa 4 oficial)
+Validação realizada em **28/10/2026**, no código-base `8d10f8d`:
 
-O baseline usa `RandomForestClassifier`. O pré-processamento preserva as
-features numéricas e aplica one-hot encoding nas categorias; códigos como
-`Browser`, `Region` e `TrafficType` são categorias nominais, não medidas
-ordenadas. O `Pipeline` ajusta o encoder somente no treino e inclui nele o
-classificador, evitando divergência entre treino e inferência.
+- Instalação pelo Poetry e verificação do lock concluídas.
+- Build das imagens de runtime e testes concluído.
+- 27 testes aprovados no Windows e no Docker Linux; Ruff e formatação aprovados.
+- Os cinco estágios executaram tanto na imagem autocontida quanto no Compose.
+- Parâmetros, métricas e artefato do modelo encontrados na run MLflow.
+- Versão 1 registrada e promovida para `champion` em ambiente novo.
+- Inferência pelo alias validada dentro do Docker.
+- Run, modelo e previsões preservados após remover e recriar os containers,
+  reutilizando o volume; reexecução com cache manteve a mesma versão.
+- Bruto, treino, teste, manifesto, relatório de validação e métricas tiveram
+  SHA-256 idêntico entre execução nativa Windows e Docker Linux. Essa comparação
+  não inclui os arquivos binários ou metadados do modelo MLflow.
 
-O stage `train` grava o pipeline em `models/trained_pipeline`, cria uma run no
-MLflow com hiperparâmetros e modelo, e salva o identificador da run. `evaluate`
-usa o conjunto de teste uma vez, registra ROC AUC, average precision, accuracy,
-precision, recall e F1, e grava `reports/metrics.json`. `register` registra a
-versão no Model Registry e aponta o alias `champion` quando o ROC AUC não é
-inferior ao da versão atual.
+## Entrega do Tech Challenge
 
-O Registry exige backend de metadados baseado em banco; `.env.example` usa
-SQLite (`sqlite:///mlflow.db`). O banco e os artefatos ficam locais e são
-ignorados pelo Git. Para inspecionar as runs após executar o pipeline:
+| Etapa oficial | Implementação |
+|---|---|
+| 1 - Clean Code e estrutura | Módulos por responsabilidade, type hints, docstrings e Ruff |
+| 2 - Ambiente e dependências | Poetry, lock e configuração externalizada |
+| 3 - Containerização e versionamento | Docker, Compose, dataset e pipeline DVC |
+| 4 - Modelagem, Registry e entrega | Random Forest, tracking, avaliação, Registry e instruções; vídeo pendente |
 
-```powershell
-poetry run mlflow ui --backend-store-uri sqlite:///mlflow.db
-```
+- [x] Repositório com histórico de contribuição da equipe.
+- [x] Instalação, testes e pipeline validados.
+- [x] Modelo, métricas e promoção no MLflow demonstrados.
+- [x] Instruções de execução, DVC, recuperação e inferência documentadas.
+- [ ] Publicar o vídeo STAR de cinco minutos e inserir seu link abaixo.
+- [ ] Conferir o acesso do avaliador ao repositório e ao vídeo antes do envio.
 
-O SQLite local serve para desenvolvimento e demonstração em uma máquina. Para
-compartilhar runs e versões registradas entre integrantes, a equipe precisará
-de um serviço MLflow e storage de artefatos compartilhados.
+**Vídeo de apresentação:** pendente de publicação. Substituir este texto pelo
+link acessível ao avaliador após a gravação.
 
-Execução de referência desta implementação: ROC AUC `0.9195`, average
-precision `0.7172`, accuracy `0.8885`, precision `0.6271`, recall `0.6911` e
-F1 `0.6575`, calculados uma vez no teste de 2.466 sessões. Esses valores
-documentam este baseline e esta divisão; não são uma meta universal de qualidade.
-Uma chamada de inferência pelo alias `champion` também foi verificada em três
-sessões de teste.
+Roteiro sugerido para o vídeo:
 
-## Roadmap
+| Intervalo | STAR | Conteúdo |
+|---|---|---|
+| 0:00-0:40 | Situation | Problema de negócio, dataset e alvo |
+| 0:40-1:10 | Task | Objetivos técnicos e restrições |
+| 1:10-4:10 | Action | Arquitetura, Poetry, Docker, DVC, pipeline e MLflow |
+| 4:10-5:00 | Result | Métricas, modelo promovido, inferência e lições aprendidas |
 
-Os números abaixo são **marcos internos do repositório**. Os marcos 3 e 4 juntos
-correspondem à Etapa 3 oficial do enunciado; os marcos 5 e 6 correspondem à Etapa 4 oficial.
-
-- [x] **Etapa 1** — Estrutura do repositório e esqueleto dos módulos
-- [x] **Etapa 2** — Poetry, dependências e implementação da ingestão
-- [x] **Etapa 3** — Pipeline DVC (`prepare → validate`, YAML e lock)
-- [x] **Etapa 4** — Docker: imagem autocontida, compose e servidor MLflow
-- [x] **Etapa 5** — Treino, avaliação e tracking no MLflow
-- [x] **Etapa 6** — Model Registry e inferência
+O linting opcional do enunciado está configurado e validado. O **deploy em
+produção na nuvem é opcional e não foi realizado**; o Compose fornece execução
+local. O storage DVC compartilhado ainda precisa ser definido pela equipe.
+Como melhorias de engenharia, ficam a dependência explícita entre validação e
+treino no grafo DVC e a cobertura automatizada de modelagem e Registry.
