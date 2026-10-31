@@ -17,12 +17,15 @@ split:
   stratify: true
 
 model:
-  # Baseline clássico para a Etapa 4 oficial.
-  name: random_forest
+  # Vencedor do benchmark comparativo (3 algoritmos x com/sem balanceamento),
+  # escolhido pela métrica `evaluation.primary_metric`. Sem `class_weight`:
+  # a variante sem balanceamento teve o melhor ROC AUC.
+  name: hist_gradient_boosting
   params:
-    n_estimators: 300
-    max_depth: null
-    class_weight: balanced
+    learning_rate: 0.05
+    max_iter: 200
+    max_leaf_nodes: 31
+    min_samples_leaf: 20
 
 evaluation:
   # Métrica de decisão para promover um modelo no Model Registry.
