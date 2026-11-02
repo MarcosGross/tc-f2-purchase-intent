@@ -7,6 +7,8 @@ navegação resultar em compra.
 
 **Grupo:** Os Outliers
 
+**Vídeo de apresentação (método STAR, 5 minutos):** https://www.youtube.com/watch?v=gzleFSnFVlQ
+
 O projeto reúne ingestão e validação de dados, treinamento com Scikit-Learn,
 versionamento com DVC, rastreamento e Model Registry com MLflow e execução em
 Docker. O caminho principal deste guia usa Docker Compose para manter os
@@ -543,29 +545,26 @@ Validação adicional em **31/10/2026**, na versão integrada:
 | 1 - Clean Code e estrutura | Módulos por responsabilidade, type hints, docstrings e Ruff |
 | 2 - Ambiente e dependências | Poetry, lock e configuração externalizada |
 | 3 - Containerização e versionamento | Docker, Compose, dataset e pipeline DVC |
-| 4 - Modelagem, Registry e entrega | Benchmark de 3 algoritmos, tracking, avaliação, Registry e instruções; vídeo pendente |
+| 4 - Modelagem, Registry e entrega | Benchmark de 3 algoritmos, tracking, avaliação, Registry, instruções e vídeo STAR publicado |
 
 - [x] Repositório com histórico de contribuição da equipe.
 - [x] Instalação, testes e pipeline validados.
 - [x] Modelo, métricas e promoção no MLflow demonstrados.
 - [x] Instruções de execução, DVC, recuperação e inferência documentadas.
-- [ ] Publicar o vídeo STAR de cinco minutos e inserir seu link abaixo.
+- [x] Vídeo STAR de cinco minutos gravado e publicado.
 - [ ] Conferir o acesso do avaliador ao repositório e ao vídeo antes do envio.
 
-**Vídeo de apresentação:** pendente de publicação. Substituir este texto pelo
-link acessível ao avaliador após a gravação.
+**Vídeo de apresentação:** https://www.youtube.com/watch?v=gzleFSnFVlQ
 
-Roteiro sugerido para o vídeo:
-
-| Intervalo | STAR | Conteúdo |
-|---|---|---|
-| 0:00-0:40 | Situation | Problema de negócio, dataset e alvo |
-| 0:40-1:10 | Task | Objetivos técnicos e restrições |
-| 1:10-4:10 | Action | Arquitetura, Poetry, Docker, DVC, pipeline e MLflow |
-| 4:10-5:00 | Result | Métricas, modelo promovido, inferência e lições aprendidas |
+O vídeo segue o método STAR: contexto de negócio e dataset (*Situation*),
+objetivos técnicos e restrições (*Task*), decisões de arquitetura com Docker,
+DVC e MLflow (*Action*), e resultados com o pipeline em execução e lições
+aprendidas (*Result*).
 
 O linting opcional do enunciado está configurado e validado. O **deploy em
 produção na nuvem é opcional e não foi realizado**; o Compose fornece execução
-local. O storage DVC compartilhado ainda precisa ser definido pela equipe.
+local. O storage DVC compartilhado ainda precisa ser definido pela equipe; o
+enunciado pede a inicialização **local** do DVC, que está atendida, e o guia
+descreve como obter o bruto sem remote.
 Como melhorias de engenharia, ficam a dependência explícita entre validação e
 treino no grafo DVC e a cobertura automatizada de modelagem e Registry.
