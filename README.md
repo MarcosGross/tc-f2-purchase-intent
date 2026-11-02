@@ -552,7 +552,6 @@ Validação adicional em **31/10/2026**, na versão integrada:
 - [x] Modelo, métricas e promoção no MLflow demonstrados.
 - [x] Instruções de execução, DVC, recuperação e inferência documentadas.
 - [x] Vídeo STAR de cinco minutos gravado e publicado.
-- [ ] Conferir o acesso do avaliador ao repositório e ao vídeo antes do envio.
 
 **Vídeo de apresentação:** https://www.youtube.com/watch?v=gzleFSnFVlQ
 
